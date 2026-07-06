@@ -3,7 +3,14 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { db } from "../db/schema";
 import RestTimer from "../components/RestTimer";
 import { C, sans } from "../theme/tokens";
-import type { ExercisePrescription, SetLog, Venue } from "../db/types";
+import type { ExercisePrescription, LadderRung, SetLog, Venue } from "../db/types";
+
+// Appends a YouTube start-time param when the rung has a specific in-video timestamp.
+function withTimestamp(url: string, timestampSec?: number): string {
+  if (timestampSec == null) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}t=${timestampSec}s`;
+}
 
 interface SessionRunnerScreenProps {
   templateId: string;
@@ -126,8 +133,11 @@ export default function SessionRunnerScreen({ templateId, onDone }: SessionRunne
           if (!exercise) return null;
           const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
           const progression = progressionStates.find((p) => p.exerciseId === exercise.id);
-          const rungName =
+          const rung: LadderRung | undefined =
             ladder && progression?.currentLadderRung != null ? ladder.rungs[progression.currentLadderRung] : undefined;
+          // Ladder exercises show the current rung's video (superseding the anchor
+          // exercise's own null videoUrl); non-ladder exercises use their own videoUrl.
+          const videoUrl = rung ? rung.videoUrl : exercise.videoUrl;
           const exerciseSetLogs = setLogs
             .filter((s) => s.exerciseId === exercise.id)
             .sort((a, b) => a.setNo - b.setNo);
@@ -138,9 +148,10 @@ export default function SessionRunnerScreen({ templateId, onDone }: SessionRunne
               sessionLogId={sessionLogId}
               prescription={prescription}
               exerciseName={exercise.name}
-              rungName={rungName}
+              rungName={rung?.name}
               venue={exercise.venue}
-              videoUrl={exercise.videoUrl}
+              videoUrl={videoUrl}
+              videoTimestampSec={rung?.timestampSec}
               existingSetLogs={exerciseSetLogs}
               restSeconds={restSecondsFor(prescription.order)}
             />
@@ -161,6 +172,7 @@ interface ExerciseCardProps {
   rungName?: string;
   venue: Venue;
   videoUrl: string | null;
+  videoTimestampSec?: number;
   existingSetLogs: SetLog[];
   restSeconds: number;
 }
@@ -172,6 +184,7 @@ function ExerciseCard({
   rungName,
   venue,
   videoUrl,
+  videoTimestampSec,
   existingSetLogs,
   restSeconds
 }: ExerciseCardProps) {
@@ -216,7 +229,7 @@ function ExerciseCard({
           )}
         </div>
         <a
-          href={videoUrl ?? undefined}
+          href={videoUrl ? withTimestamp(videoUrl, videoTimestampSec) : undefined}
           target="_blank"
           rel="noreferrer"
           onClick={(e) => {

@@ -1,17 +1,16 @@
 // Transcribed verbatim from docs/exercise-library-v1.0.md section 2 (Exercise Pool).
-// videoUrl is seeded null throughout — merged later from the Cowork video-links.csv
-// deliverable (spec section 4 / build brief section 4). Do not add exercises or
-// prescriptions not present in the library.
-//
-// cues: the library has no per-exercise coaching-cue text field. Populated only from the
-// library's own "busy-gym substitution" notes (gym exercises) where present; left blank
-// otherwise. Authoring full technique cues is new content, out of scope for this seed.
+// description and videoUrl merged from docs/video-links.csv (joined on exerciseId) via
+// scripts/merge-video-links.mjs — do not hand-edit the merged fields, re-run the script
+// instead. Ladder-anchor exercises (H-01, H-02, H-03, H-04, H-09) keep videoUrl null here;
+// their per-rung video detail lives on VariationLadder.rungs (see src/data/ladders.ts).
 import type { Exercise } from "../db/types";
 
 function gymExercise(
   id: string,
   name: string,
   pattern: string,
+  description: string,
+  videoUrl: string | null,
   substitution?: string
 ): Exercise {
   return {
@@ -20,12 +19,20 @@ function gymExercise(
     pattern,
     venue: "gym",
     cues: substitution ? `Busy-gym sub: ${substitution}` : "",
-    videoUrl: null,
+    description,
+    videoUrl,
     substitution
   };
 }
 
-function homeExercise(id: string, name: string, pattern: string, ladderId?: string): Exercise {
+function homeExercise(
+  id: string,
+  name: string,
+  pattern: string,
+  description: string,
+  videoUrl: string | null,
+  ladderId?: string
+): Exercise {
   return {
     id,
     name,
@@ -33,63 +40,64 @@ function homeExercise(id: string, name: string, pattern: string, ladderId?: stri
     venue: "home",
     ladderId,
     cues: "",
-    videoUrl: null
+    description,
+    videoUrl
   };
 }
 
 export const GYM_EXERCISES: Exercise[] = [
-  gymExercise("G-01", "Back squat (barbell)", "Squat", "Goblet squat (map: DB approx 40% bar load) or leg press"),
-  gymExercise("G-02", "Trap bar deadlift", "Hinge", "Barbell deadlift or heavy DB RDL"),
-  gymExercise("G-03", "Romanian deadlift (barbell)", "Hinge", "DB RDL"),
-  gymExercise("G-04", "Bench press (barbell)", "H-push", "DB bench press"),
-  gymExercise("G-05", "Seated DB shoulder press", "V-push", "Machine shoulder press"),
-  gymExercise("G-06", "Barbell row", "H-pull", "Chest-supported DB row"),
-  gymExercise("G-07", "Lat pulldown", "V-pull", "Assisted pull-up / band pull-up"),
-  gymExercise("G-08", "Bulgarian split squat (DB)", "SL squat", "DB split squat"),
-  gymExercise("G-09", "Walking lunge (DB)", "SL squat", "Reverse lunge (DB)"),
-  gymExercise("G-10", "Lateral lunge (DB)", "Frontal", "Bodyweight lateral lunge"),
-  gymExercise("G-11", "Pallof press (cable)", "Anti-rotation", "Band Pallof press"),
-  gymExercise("G-12", "Cable chop (high-to-low)", "Rotation", "Band chop"),
-  gymExercise("G-13", "Med ball rotational throw (side, to wall)", "Rotation-power", "Band explosive rotation"),
-  gymExercise("G-14", "Med ball slam", "Power", "DB high-pull (light)"),
-  gymExercise("G-15", "Jump squat (bodyweight)", "Power"),
-  gymExercise("G-16", "Broad jump", "Power", "Box jump"),
-  gymExercise("G-17", "Plyo push-up", "Power", "Fast-tempo push-up (X concentric)"),
-  gymExercise("G-18", "Barbell hip thrust", "Hinge/glute", "DB glute bridge"),
-  gymExercise("G-19", "Single-leg RDL (DB)", "SL hinge", "Bodyweight SL RDL"),
-  gymExercise("G-20", "Farmer carry (DB)", "Carry", "Suitcase carry (single DB)"),
-  gymExercise("G-21", "Face pull (cable)", "H-pull/posture", "Band pull-apart"),
-  gymExercise("G-22", "Landmine rotation", "Rotation", "Cable chop (low-to-high)"),
-  gymExercise("G-23", "Box jump", "Power", "Jump squat"),
-  gymExercise("G-24", "Suitcase carry (DB)", "Anti-lateral", "Single-arm farmer carry")
+  gymExercise("G-01", "Back squat (barbell)", "Squat", "Stand with the bar across your upper traps, feet shoulder-width apart. Break at the hips and knees together, sitting down and back while keeping your chest tall and knees tracking over your toes, then drive through mid-foot to stand. This is the foundation lower-body strength movement that builds the leg drive and ground force production that power the golf swing.", "https://www.youtube.com/watch?v=7v_V6xiA_AA", "Goblet squat (map: DB approx 40% bar load) or leg press"),
+  gymExercise("G-02", "Trap bar deadlift", "Hinge", "Stand inside the trap bar with a neutral grip on the handles, hips back and chest up. Drive through the floor and extend your hips and knees together to stand tall, keeping the bar close to your body throughout. It trains hip-hinge strength with a more upright torso than a barbell deadlift, building the posterior-chain power that underpins swing speed.", "https://www.youtube.com/watch?v=TU2xZ7s4jus", "Barbell deadlift or heavy DB RDL"),
+  gymExercise("G-03", "Romanian deadlift (barbell)", "Hinge", "Hold the bar at hip height and push your hips back while keeping a soft knee bend and a flat back, lowering the bar down the front of your legs until you feel a hamstring stretch. Reverse the motion by driving your hips forward to standing. This builds hip-hinge control and hamstring/glute strength, key for maintaining posture and generating power through impact.", "https://www.youtube.com/watch?v=5bJEigM5iVg", "DB RDL"),
+  gymExercise("G-04", "Bench press (barbell)", "H-push", "Lie on the bench with shoulder blades pulled back and down, and lower the bar under control to your chest before pressing it back up in a straight line. Keep your feet planted and a slight arch through your upper back for a stable base. It builds upper-body pressing strength that supports the trail-arm extension and overall upper-body power in the swing.", "https://www.youtube.com/watch?v=BYKScL2sgCs", "DB bench press"),
+  gymExercise("G-05", "Seated DB shoulder press", "V-push", "Sit with back support, dumbbells at shoulder height, and press them overhead until your arms are extended without arching your lower back excessively. Lower with control back to the start position. This builds shoulder-pressing strength and stability overhead, supporting posture and shoulder resilience through the swing.", "https://www.youtube.com/watch?v=qEwKCR5JCog", "Machine shoulder press"),
+  gymExercise("G-06", "Barbell row", "H-pull", "Hinge forward at the hips with a flat back, grip the bar just outside your legs, and pull it into your lower ribcage by driving your elbows back. Lower it under control without letting your back round. It trains the pulling strength and scapular control that support posture and the back muscles used throughout the swing.", "https://www.youtube.com/watch?v=RQU8wZPbioA", "Chest-supported DB row"),
+  gymExercise("G-07", "Lat pulldown", "V-pull", "Sit tall with knees secured under the pad, grip the bar wider than shoulder-width, and pull it down to your upper chest by driving your elbows down and back. Control the return to a full stretch overhead. This builds lat and upper-back strength, supporting the wide, stable shoulder turn needed in the backswing.", "https://www.youtube.com/watch?v=O94yEoGXtBY", "Assisted pull-up / band pull-up"),
+  gymExercise("G-08", "Bulgarian split squat (DB)", "SL squat", "Rest your rear foot on a bench behind you, holding dumbbells at your sides, and lower straight down until your front thigh is roughly parallel to the floor. Drive back up through your front heel, keeping your torso mostly vertical rather than leaning forward. It builds single-leg strength and balance that carry over to the weight shift and stability through the swing.", "https://www.youtube.com/watch?v=-4LVK1crLSw", "DB split squat"),
+  gymExercise("G-09", "Walking lunge (DB)", "SL squat", "Holding a dumbbell in each hand, step forward into a lunge and lower your rear knee toward the floor, then drive through your front heel to step into the next lunge. Keep your torso upright and your front knee tracking over your foot. It builds single-leg strength and hip stability that support balance and power transfer during the swing.", "https://www.youtube.com/watch?v=_DLIS8SySzs", "Reverse lunge (DB)"),
+  gymExercise("G-10", "Lateral lunge (DB)", "Frontal", "Take a wide step to one side and sit your hips back and down over that leg, keeping the other leg straight with its foot flat on the floor. Push back explosively through the bent leg to return to standing. It builds frontal-plane strength and hip mobility that mirror the lateral weight shift in the golf swing.", "https://www.youtube.com/watch?v=n3dt9LSFdkc", "Bodyweight lateral lunge"),
+  gymExercise("G-11", "Pallof press (cable)", "Anti-rotation", "Stand side-on to a cable machine set at chest height, hold the handle at your sternum with both hands, and press it straight out in front of you without letting your torso rotate toward the machine. Hold briefly, then return with control. This is an anti-rotation exercise that trains your core to resist unwanted rotation, protecting your spine and improving control through the swing.", "https://www.youtube.com/watch?v=KZRqkQ3ZtP0", "Band Pallof press"),
+  gymExercise("G-12", "Cable chop (high-to-low)", "Rotation", "Set the cable high, grip the handle with both hands, and rotate your torso and hips while pulling the cable down and across your body to the opposite hip, keeping your arms relatively straight. Return under control and repeat all reps on one side before switching. It trains rotational core power in the same high-to-low pattern used in the downswing.", "https://www.youtube.com/watch?v=qLVyz3OvkYY", "Band chop"),
+  gymExercise("G-13", "Med ball rotational throw (side, to wall)", "Rotation-power", "Stand side-on to a wall holding a medicine ball at your hip, load into your back leg, then explosively rotate your hips and torso to throw the ball into the wall. Catch or reset and repeat, keeping the movement fast and athletic rather than slow and controlled. This trains rotational power production, directly mirroring the speed and sequencing of the golf downswing.", "https://www.youtube.com/watch?v=-K3j9UWGWlA", "Band explosive rotation"),
+  gymExercise("G-14", "Med ball slam", "Power", "Raise a medicine ball overhead, then use your legs, hips and core together to slam it down into the ground as hard as you can, catching the bounce or resetting for the next rep. Keep your back flat rather than rounding as you bend to reset. It trains explosive full-body power and rate of force development that carries into a faster downswing.", "https://www.youtube.com/watch?v=qlesqOFyBhY", "DB high-pull (light)"),
+  gymExercise("G-15", "Jump squat (bodyweight)", "Power", "From a standing squat position, drop into a quarter-to-half squat and immediately jump as high as you can, swinging your arms up for momentum, then land softly back into the squat position. Keep your knees tracking over your toes on landing. It trains lower-body power and reactive strength that transfer to ground-force production in the swing.", "https://www.youtube.com/watch?v=tZSYZdtbONc"),
+  gymExercise("G-16", "Broad jump", "Power", "Stand with feet hip-width apart, swing your arms back and bend your knees to load, then drive forward and up to jump as far as you can, landing softly with bent knees. Stick the landing before resetting for the next rep. It trains horizontal power and landing control, both important for the explosive, athletic base needed in the swing.", "https://www.youtube.com/watch?v=SReNxd_k5t0", "Box jump"),
+  gymExercise("G-17", "Plyo push-up", "Power", "From a standard push-up position, lower under control, then push explosively so your hands leave the floor, landing softly and immediately absorbing the impact before the next rep. Keep your body in a straight line throughout. It trains upper-body power and rate of force development that support the explosive extension through impact and the follow-through.", "https://www.youtube.com/watch?v=MH4gcTKQiEc", "Fast-tempo push-up (X concentric)"),
+  gymExercise("G-18", "Barbell hip thrust", "Hinge/glute", "Sit with your upper back against a bench and a padded barbell across your hips, feet flat and roughly shin-vertical at the bottom. Drive your hips up until your body forms a straight line from shoulders to knees, squeezing your glutes at the top, then lower under control. It trains glute and hip-extension strength, a key contributor to ground-force production and hip drive in the downswing.", "https://www.youtube.com/watch?v=xDmFkJxPzeM", "DB glute bridge"),
+  gymExercise("G-19", "Single-leg RDL (DB)", "SL hinge", "Holding a dumbbell in one or both hands, hinge forward at the hips over one leg while your other leg extends straight back for balance, keeping your hips square to the floor. Return to standing by driving your hips forward. It trains single-leg balance and posterior-chain strength, supporting stability through the weight shift in the swing.", "https://www.youtube.com/watch?v=Zfr6wizR8rs", "Bodyweight SL RDL"),
+  gymExercise("G-20", "Farmer carry (DB)", "Carry", "Pick up a heavy dumbbell in each hand and walk for the prescribed distance, keeping your shoulders back, chest tall and core braced rather than leaning to either side. Take controlled steps rather than rushing. It builds grip, trunk stability and total-body strength, supporting posture and control under load throughout the round.", "https://www.youtube.com/watch?v=X72HhVGAko4", "Suitcase carry (single DB)"),
+  gymExercise("G-21", "Face pull (cable)", "H-pull/posture", "Set a cable or band at head height, grip the rope with both hands, and pull it toward your face while flaring your elbows out and squeezing your shoulder blades together. Return with control. It strengthens the upper-back and rear-shoulder muscles that support posture and shoulder health through repeated swings.", "https://www.youtube.com/watch?v=uty8Gti1X9M", "Band pull-apart"),
+  gymExercise("G-22", "Landmine rotation", "Rotation", "Wedge one end of a barbell into a corner or landmine attachment, hold the other end with both hands at chest height, and rotate your torso and hips to swing the bar from one hip to the other, keeping your arms relatively fixed relative to your chest. Control the movement in both directions. It trains rotational strength through a full range of motion, closely mirroring the golf swing's rotational pattern.", "https://www.youtube.com/watch?v=Rn05oNsaoBI", "Cable chop (low-to-high)"),
+  gymExercise("G-23", "Box jump", "Power", "Stand facing a sturdy box, load into a quarter squat, and jump both feet onto the box, landing softly with bent knees. Step back down rather than jumping down, to protect your joints. It trains explosive lower-body power and confidence absorbing and producing force, both central to generating clubhead speed.", "https://www.youtube.com/watch?v=9lfhjmrC8Zo", "Jump squat"),
+  gymExercise("G-24", "Suitcase carry (DB)", "Anti-lateral", "Pick up a single heavy dumbbell in one hand and walk for the prescribed distance, resisting the pull to lean or side-bend toward the loaded side by bracing your core. Keep your shoulders level and walk with control. It trains anti-lateral-flexion core strength, protecting the spine and improving stability against the one-sided loading pattern of the swing.", "https://www.youtube.com/watch?v=LJaq4BS7KpE", "Single-arm farmer carry"),
 ];
 
 export const HOME_EXERCISES: Exercise[] = [
-  homeExercise("H-01", "Squat ladder", "Squat", "L1"),
-  homeExercise("H-02", "Push-up ladder", "H-push", "L2"),
-  homeExercise("H-03", "Glute bridge ladder", "Hinge", "L3"),
-  homeExercise("H-04", "Side plank ladder", "Anti-lateral", "L4"),
-  homeExercise("H-05", "Dead bug", "Anti-extension"),
-  homeExercise("H-06", "Bird dog", "Anti-rotation"),
-  homeExercise("H-07", "Copenhagen plank (short lever)", "Adductor/stability"),
-  homeExercise("H-08", "Speed skater", "Frontal-power"),
-  homeExercise("H-09", "Rotational hop ladder", "Rotation-power", "L5"),
-  homeExercise("H-10", "Broad jump (garden)", "Power"),
-  homeExercise("H-11", "Pogo hops", "Reactive"),
-  homeExercise("H-12", "Mountain climber (fast)", "Power/core"),
-  homeExercise("H-13", "Open book", "T-spine mobility"),
-  homeExercise("H-14", "Seated wall thoracic rotation", "T-spine mobility (= ROM test)"),
-  homeExercise("H-15", "90/90 hip switch", "Hip mobility (= ROM test)"),
-  homeExercise("H-16", "Couch stretch", "Hip flexor"),
-  homeExercise("H-17", "World's greatest stretch", "Full-body mobility"),
-  homeExercise("H-18", "Hamstring toe-reach flow", "Posterior chain (= ROM test kin)"),
-  homeExercise("H-19", "Cossack squat", "Frontal mobility"),
-  homeExercise("H-20", "Cat-cow segmentation", "Spine mobility"),
-  homeExercise("H-21", "Shoulder taps", "Anti-rotation"),
-  homeExercise("H-22", "Hollow hold", "Anti-extension"),
-  homeExercise("H-23", "Club speed swings - lead side", "Speed (specific)"),
-  homeExercise("H-24", "Club speed swings - trail side (opposite hand)", "Speed (specific)"),
-  homeExercise("H-25", "Inverted-driver overspeed swings", "Speed (specific)")
+  homeExercise("H-01", "Squat ladder", "Squat", "Start with a basic chair-supported squat to master depth and control, then progress through a split squat and a Bulgarian (rear-foot-elevated) split squat as your single-leg strength improves. Keep your front knee tracking over your toes and your chest tall at each stage. This progression builds the graded leg strength and single-leg control that underpin ground-force production through the swing, though it stops short of the jump-squat and single-leg box-squat rungs in this library's full ladder.", null, "L1"),
+  homeExercise("H-02", "Push-up ladder", "H-push", "Work through push-up variations from the easiest positional drills up to the hardest, with each of the ten progressions building on the last — the coach flags when you are ready to move up a level. Keep your body in a straight line and your hips level at every stage rather than letting them sag or pike. This progression builds the pressing strength and power that support the trail arm and upper-body contribution to the swing, right through to the explosive plyo push-up.", null, "L2"),
+  homeExercise("H-03", "Glute bridge ladder", "Hinge", "Lie on your back with knees bent and feet flat, then progress from lifting your hips as a two-legged bridge, to marching one knee up while holding the bridge, to lifting one whole leg straight in a single-leg bridge. Keep your hips level and avoid arching your lower back at each stage. This progression builds single-leg glute strength and pelvic control, supporting stability through the hip-driven rotation of the swing.", null, "L3"),
+  homeExercise("H-04", "Side plank ladder", "Anti-lateral", "Lie on your side propped on your forearm or hand, and progress the side plank from a knees-bent version through to a full-body hold, increasing hold time and reducing points of contact with the floor as you advance. Keep your hips lifted and stacked, not sagging or rotating forward. This builds lateral core (anti-lateral-flexion) strength, protecting the spine against the side-bending forces in the swing.", null, "L4"),
+  homeExercise("H-05", "Dead bug", "Anti-extension", "Lie on your back with arms reaching to the ceiling and knees bent at 90 degrees. Slowly lower one arm overhead and the opposite leg toward the floor while keeping your lower back flat against the ground, then return and repeat on the other side. It trains anti-extension core control, teaching you to brace your trunk without letting your back arch, which supports posture throughout the swing.", "https://www.youtube.com/watch?v=BZYaCzbP09M"),
+  homeExercise("H-06", "Bird dog", "Anti-rotation", "Start on all fours with your hands under your shoulders and knees under your hips. Extend one arm straight ahead and the opposite leg straight behind, keeping your hips and shoulders level and avoiding any rotation, then return and switch sides. It trains anti-rotation core stability and coordination between opposite limbs, supporting a stable, connected turn in the swing.", "https://www.youtube.com/watch?v=egKWoMZ6cXM"),
+  homeExercise("H-07", "Copenhagen plank (short lever)", "Adductor/stability", "Lie on your side with your top leg's shin or knee resting on a bench and your bottom leg lifted, then prop up on your forearm and hold your hips level in a side-plank-like position. The short-lever version bends the top knee to reduce the demand compared to the full straight-leg version. It targets the adductors (inner thigh) for stability, protecting the hips and knees against the lateral loading of the swing.", "https://www.youtube.com/watch?v=p2xXd1fPh2A"),
+  homeExercise("H-08", "Speed skater", "Frontal-power", "Shift your weight onto one leg, then push off explosively to bound sideways onto the other leg, swinging your arms for momentum and sticking each landing with a soft, bent knee before pushing off again. Keep your chest up rather than collapsing forward on landing. It trains lateral power and single-leg landing control, supporting the sideways loading and unloading in the golf swing's weight shift.", "https://www.youtube.com/watch?v=9_jLW6VkU8A"),
+  homeExercise("H-09", "Rotational hop ladder", "Rotation-power", "Balance on one leg, then hop and rotate 90 degrees in the air before landing softly on the same leg and holding the landing under control before resetting. The emphasis is on absorbing force and controlling the landing, not just producing the turn. This is a reactive rotational-power exercise that trains the explosive hip rotation and landing stability used to generate and control clubhead speed.", null, "L5"),
+  homeExercise("H-10", "Broad jump (garden)", "Power", "Stand with feet hip-width apart, swing your arms back and bend your knees to load, then drive forward and up to jump as far as you can, landing softly with bent knees. Stick the landing before resetting for the next rep — the garden/home version uses the same technique as the gym version, just without equipment. It trains horizontal power and landing control, supporting the explosive, athletic base needed in the swing.", "https://www.youtube.com/watch?v=SReNxd_k5t0"),
+  homeExercise("H-11", "Pogo hops", "Reactive", "Stand tall with knees only slightly bent, and bounce repeatedly off the balls of your feet using mainly your ankles rather than bending your knees. Keep contact with the ground brief and springy, like a pogo stick. It trains reactive ankle stiffness and elastic strength, building the quick ground contact needed to transfer force efficiently in the swing.", "https://www.youtube.com/watch?v=dMnECxl6dsY"),
+  homeExercise("H-12", "Mountain climber (fast)", "Power/core", "Start in a high plank position and drive your knees alternately toward your chest at a fast, controlled pace, keeping your hips level and your core braced throughout. Avoid letting your hips pike up or sag down. It trains core stability under a fast cadence alongside a cardio/conditioning effect, supporting trunk control during quick, repeated movements.", "https://www.youtube.com/watch?v=CQk4MHY2_Tc"),
+  homeExercise("H-13", "Open book", "T-spine mobility", "Lie on your side with your knees bent at 90 degrees and arms stretched out in front of you. Rotate your top arm up and across to the other side, following it with your eyes and letting your upper back rotate, while keeping your knees stacked and still. It's a thoracic (mid-back) mobility exercise that improves the rotational range needed for a full, unrestricted shoulder turn in the swing.", "https://www.youtube.com/watch?v=XmpMtdllbfQ"),
+  homeExercise("H-14", "Seated wall thoracic rotation", "T-spine mobility (= ROM test)", "Sit with your back against a wall and knees bent, arms crossed over your chest, then rotate your torso as far as you can to one side while keeping your hips and lower back pressed against the wall. Hold briefly and repeat on the other side. Because the wall blocks hip movement, this isolates and measures pure thoracic (mid-back) rotation range — the same range-of-motion test used as a baseline in this programme.", "https://www.youtube.com/watch?v=DWwkVdXLQsU"),
+  homeExercise("H-15", "90/90 hip switch", "Hip mobility (= ROM test)", "Sit on the floor with both legs bent at 90 degrees, one in front and one to the side, then rotate both legs together to switch sides so the front leg becomes the side leg and vice versa, keeping your hands off the floor if you can. Move under control rather than flopping between sides. It's a hip mobility exercise and range-of-motion test that builds the hip rotation needed for a full backswing and follow-through.", "https://www.youtube.com/watch?v=PzfKxGhzZ1U"),
+  homeExercise("H-16", "Couch stretch", "Hip flexor", "Kneel in front of a couch or wall with your back foot up against it and your shin vertical, then bring your front foot forward into a half-kneeling lunge and squeeze your glute on the back side while keeping your torso upright. Hold the stretch, breathing steadily. It lengthens the hip flexors at the front of the hip, improving the hip extension needed for a full, powerful turn through the ball.", "https://www.youtube.com/watch?v=dkfpkwUsO1E"),
+  homeExercise("H-17", "World's greatest stretch", "Full-body mobility", "From a push-up position, step one foot forward outside your hand into a deep lunge, drop your back knee down, then rotate your torso and reach the same-side arm up toward the ceiling. Return and repeat on the other side. It's a full-body mobility flow that opens the hips, hamstrings and thoracic spine together, covering several of the ranges of motion used across the golf swing in one movement.", "https://www.youtube.com/watch?v=-CiWQ2IvY34"),
+  homeExercise("H-18", "Hamstring toe-reach flow", "Posterior chain (= ROM test kin)", "Standing tall, hinge forward reaching toward your toes, going only as far as you can with a flat back, then use small pulsing or breathing-led progressions to gradually deepen the reach over the set. Avoid rounding your lower back to force the stretch. It's a graded hamstring-flexibility progression that improves the posterior-chain range of motion used in the setup and through the swing.", "https://www.youtube.com/watch?v=msxD4cnf1wQ"),
+  homeExercise("H-19", "Cossack squat", "Frontal mobility", "Take a wide stance, then shift your weight to one side and squat down over that leg while keeping the other leg straight with its foot flat, before pushing back to the middle and repeating on the other side. Keep your chest up and both feet flat where possible. It builds hip and ankle mobility together with single-leg strength in the frontal plane, supporting the lateral weight shift in the swing.", "https://www.youtube.com/watch?v=LFkinX12jtU"),
+  homeExercise("H-20", "Cat-cow segmentation", "Spine mobility", "On all fours, alternate between arching your back up toward the ceiling (cat) and letting it sag down toward the floor (cow), moving through your spine one segment at a time rather than as one block. Keep the movement slow and controlled. It builds segmental spinal mobility, improving the smooth, sequenced spinal movement used through the swing.", "https://www.youtube.com/watch?v=99hEnqCPaRQ"),
+  homeExercise("H-21", "Shoulder taps", "Anti-rotation", "Hold a high plank position with hands under your shoulders, then lift one hand to tap the opposite shoulder while keeping your hips as still and level as possible, alternating sides. Widen your feet if you need more stability. It trains anti-rotation core control under a moving-limb challenge, supporting a stable trunk during the swing.", "https://www.youtube.com/watch?v=g3bsSUOn-vo"),
+  homeExercise("H-22", "Hollow hold", "Anti-extension", "Lie on your back, press your lower back flat into the floor, and lift your shoulders and legs slightly off the ground with arms reaching overhead, holding a slight banana-like curve through your body. Keep breathing rather than holding your breath, and regress by bending your knees if your back lifts off the floor. It builds whole-body tension and anti-extension core strength, supporting a stable, connected body through the swing.", "https://www.youtube.com/watch?v=hK7QTWGRBu0"),
+  homeExercise("H-23", "Club speed swings - lead side", "Speed (specific)", "Using a lightweight overspeed training club, make full-effort practice swings emphasising your lead arm and side driving the club through impact, swinging into a net or open space with full recovery between reps. Commit to maximum, uninhibited swing speed rather than a controlled tempo. It trains the lead side's contribution to clubhead speed as part of a structured overspeed protocol.", "https://www.youtube.com/watch?v=9DGv0KK7_Xw"),
+  homeExercise("H-24", "Club speed swings - trail side (opposite hand)", "Speed (specific)", "Using a lightweight overspeed training club, make full-effort practice swings emphasising your trail (non-lead) arm and side, mirroring your normal swing to train the opposite side of your body. Swing into a net or open space with full recovery between reps, committing to maximum effort. It balances the one-sided loading of the golf swing and trains the trail side's contribution to clubhead speed.", "https://www.youtube.com/watch?v=9DGv0KK7_Xw"),
+  homeExercise("H-25", "Inverted-driver overspeed swings", "Speed (specific)", "Holding your driver upside down by the club head (or using a designated lightweight training club), make full-effort practice swings — the altered weighting and grip point trains fast hand and arm speed without a heavy club head slowing you down. Swing into open space with full recovery between reps at maximum committed effort. It's an overspeed technique that trains raw arm and hand speed as part of the broader speed-training protocol.", "https://www.youtube.com/watch?v=9DGv0KK7_Xw"),
 ];
 
 export const ALL_EXERCISES: Exercise[] = [...GYM_EXERCISES, ...HOME_EXERCISES];

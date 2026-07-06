@@ -31,9 +31,26 @@ export function validateLibrary(
     if (ex.videoUrl !== null && typeof ex.videoUrl !== "string") {
       errors.push(`exercise ${ex.id}: videoUrl must be null or string, got ${typeof ex.videoUrl}`);
     }
+    if (!ex.description || ex.description.trim().length === 0) {
+      errors.push(`exercise ${ex.id}: missing or empty description`);
+    }
     if (ex.ladderId && !ladderIds.has(ex.ladderId)) {
       errors.push(`exercise ${ex.id}: orphan ladderId '${ex.ladderId}'`);
     }
+  }
+
+  for (const ladder of ladders) {
+    ladder.rungs.forEach((rung, i) => {
+      if (!rung.name || rung.name.trim().length === 0) {
+        errors.push(`ladder ${ladder.id}: rung ${i + 1} has no name`);
+      }
+      if (rung.videoUrl !== null && typeof rung.videoUrl !== "string") {
+        errors.push(`ladder ${ladder.id}: rung ${i + 1} videoUrl must be null or string`);
+      }
+      if (rung.timestampSec !== undefined && (!Number.isInteger(rung.timestampSec) || rung.timestampSec < 0)) {
+        errors.push(`ladder ${ladder.id}: rung ${i + 1} timestampSec must be a positive integer`);
+      }
+    });
   }
 
   for (const t of sessionTemplates) {

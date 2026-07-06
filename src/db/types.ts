@@ -94,10 +94,28 @@ export interface Exercise {
   venue: Venue;
   ladderId?: string;
   cues: string;
+  // Required (P1.1 addition): merged from docs/video-links.csv, joined on exerciseId.
+  // For the 5 ladder-anchor exercises (H-01, H-02, H-03, H-04, H-09) this is still the
+  // exercise-level overview description from that CSV; their per-rung video detail lives
+  // on VariationLadder.rungs instead (see LadderRung below).
+  description: string;
   repRange?: RepRange;
   targetRPE?: number;
+  // Null for the 5 ladder-anchor exercises even though docs/video-links.csv carries a
+  // value for them — rung-level video data (VariationLadder.rungs[n].videoUrl) supersedes
+  // it, since the anchor's own videoUrl can only cover one rung's demonstration at a time.
   videoUrl: string | null;
   substitution?: string;
+}
+
+// P1.1 addition: per-rung video detail merged from docs/ladder-video-links.csv, joined on
+// (ladder, rung). videoUrl is null where no adequate video was found (H-09 rung 1 is the
+// one intentional case in the source data); timestampSec is undefined when the source
+// video has no specific in-video timestamp for this rung.
+export interface LadderRung {
+  name: string;
+  videoUrl: string | null;
+  timestampSec?: number;
 }
 
 // Deviation (flagged): spec §7 models VariationLadder.exerciseIds as references to distinct
@@ -105,12 +123,13 @@ export interface Exercise {
 // exercise (e.g. H-01 "Squat ladder", ladderId -> L1) with rungs described as prose
 // variations (section 3) — and AT-P1 requires exactly 49 Exercise records (G-01..G-24 +
 // H-01..H-25), which is incompatible with one Exercise per rung. Rungs are modelled as
-// ordered display strings; the anchor Exercise (Exercise.ladderId) is shown together with
-// rungs[ProgressionState.currentLadderRung] in the Session runner and Programme map.
+// ordered objects (name + optional video); the anchor Exercise (Exercise.ladderId) is
+// shown together with rungs[ProgressionState.currentLadderRung] in the Session runner and
+// Programme map.
 export interface VariationLadder {
   id: string;
   pattern: string;
-  rungs: string[]; // ordered rung display names, index 0 = easiest
+  rungs: LadderRung[]; // ordered rungs, index 0 = easiest
 }
 
 export interface SessionLog {
