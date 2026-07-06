@@ -3,6 +3,7 @@
 **Phase:** P2 — engine, transfer, progress
 **Repo:** https://github.com/rtonne8-cyber/swing-gains (public)
 **Deploy URL:** https://rtonne8-cyber.github.io/swing-gains/
+**Commit SHA:** `bc230697ccd3dd259af1256d928b2b902be5c11b`
 **Date:** 2026-07-06
 
 ## What's built
