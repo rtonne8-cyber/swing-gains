@@ -37,6 +37,12 @@ export function validateLibrary(
     if (ex.ladderId && !ladderIds.has(ex.ladderId)) {
       errors.push(`exercise ${ex.id}: orphan ladderId '${ex.ladderId}'`);
     }
+    if (ex.loadRegion !== undefined && ex.loadRegion !== "upper" && ex.loadRegion !== "lower") {
+      errors.push(`exercise ${ex.id}: loadRegion must be undefined, 'upper' or 'lower'`);
+    }
+    if (ex.venue === "home" && ex.loadRegion !== undefined) {
+      errors.push(`exercise ${ex.id}: home exercises are bodyweight/ladder-progressed and must not carry loadRegion`);
+    }
   }
 
   for (const ladder of ladders) {

@@ -25,3 +25,24 @@ an interactive browser auth flow will complete in this environment.
 
 Brand: Personal set — Slate `#34699E`, Copper `#C77B3C`, warm grey `#D8D4C9`, white;
 system-sans font stack. Sibling identity to Net Gains (`net-practice`).
+
+## Subagent policy (P2 onward)
+- Build work is single-agent and sequential. Do NOT parallelise engine, transfer,
+  and UI across subagents — they share one schema and one set of conventions, and
+  parallel edits to this codebase are net-negative.
+- Subagents are permitted for exactly two bounded, read-only jobs:
+  1. VERIFIER (mandatory, P2): once src/engine and src/transfer compile and their
+     Vitest suites pass, dispatch a fresh-context subagent given ONLY:
+     docs/spec-v1.2.md §3.3, §3.4, §5.4; the AT-P2 list from the build brief;
+     and the source + test files for those two modules. Do not pass it any build
+     conversation or reasoning. Its task: independently check implementation and
+     fixtures against the spec — rule misreadings, missing edge cases (RPE
+     ceiling, calibration derivation, idempotent re-import, recompute-equals-
+     replay), and tests that assert the code's behaviour rather than the spec's.
+     It returns a findings report only.
+  2. EXPLORER (optional): read-only repo/docs exploration to keep main context lean.
+- Subagents never edit files. The main agent reviews the verifier report, applies
+  fixes, and re-runs the suite.
+- The P2 handback must include the verifier's findings verbatim, each marked
+  fixed / rejected-with-reason. An empty findings report is a yellow flag, not a
+  pass — state what the verifier was given and why it found nothing.

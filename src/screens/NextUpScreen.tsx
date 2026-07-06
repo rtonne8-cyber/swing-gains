@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { db } from "../db/schema";
+import { evaluateBlockTransition } from "../engine/blockTransition";
 import { computeNextUp } from "../engine/queues";
 import { C, sans } from "../theme/tokens";
 import type { Venue } from "../db/types";
@@ -34,6 +35,7 @@ export default function NextUpScreen({ onStartSession }: NextUpScreenProps) {
     programme.currentBlockStartDate,
     new Date().toISOString()
   );
+  const transitionStatus = evaluateBlockTransition(nextUp, block.transitionRules);
   const activeTemplateId = venue === "gym" ? nextUp.nextGymTemplateId : nextUp.nextHomeTemplateId;
   const activeTemplate = blockTemplates.find((t) => t.id === activeTemplateId);
 
@@ -116,6 +118,17 @@ export default function NextUpScreen({ onStartSession }: NextUpScreenProps) {
           {nextUp.gymSessionsCompleted}/{block.transitionRules.minGymSessions} &middot; Home{" "}
           {nextUp.homeSessionsCompleted}/{block.transitionRules.minHomeSessions}
         </div>
+        {(transitionStatus.gymSessionsBehindPace > 0 || transitionStatus.homeSessionsBehindPace > 0) && (
+          <div style={{ fontSize: 12, color: C.copper, marginTop: 6, fontWeight: 700 }}>
+            {transitionStatus.gymSessionsBehindPace > 0 && `${transitionStatus.gymSessionsBehindPace} gym sessions behind pace. `}
+            {transitionStatus.homeSessionsBehindPace > 0 && `${transitionStatus.homeSessionsBehindPace} home sessions behind pace.`}
+          </div>
+        )}
+        {transitionStatus.shouldTransition && (
+          <div style={{ fontSize: 12, color: C.ok, marginTop: 6, fontWeight: 700 }}>
+            Block complete — finish your next session to run the ROM tests and move on.
+          </div>
+        )}
       </div>
     </div>
   );

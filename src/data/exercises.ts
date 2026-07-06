@@ -3,7 +3,35 @@
 // scripts/merge-video-links.mjs — do not hand-edit the merged fields, re-run the script
 // instead. Ladder-anchor exercises (H-01, H-02, H-03, H-04, H-09) keep videoUrl null here;
 // their per-rung video detail lives on VariationLadder.rungs (see src/data/ladders.ts).
-import type { Exercise } from "../db/types";
+import type { Exercise, LoadRegion } from "../db/types";
+
+// P2 addition (flagged, see Exercise.loadRegion in src/db/types.ts): the library's
+// `pattern` column has no upper/lower field of its own, so this mapping derives one for
+// the progression engine's +2.5kg/+5kg increment rule (spec §3.4 rule 2). Squat/hinge/
+// carry families -> lower; press/pull families -> upper. Rotational/anti-rotation cable
+// work (Pallof press, cable chop, landmine rotation) is arm-loaded but core-driven — mapped
+// to "upper" as the more conservative (smaller) increment rather than inventing a third
+// category. Power/Rotation-power patterns (med ball throws, jumps, plyo push-up) are
+// intent/quality work per spec §3.2's block table, not a load-progression signal, and are
+// intentionally left unmapped (undefined) so the engine excludes them from double
+// progression entirely.
+const LOAD_REGION_BY_PATTERN: Record<string, LoadRegion> = {
+  Squat: "lower",
+  Hinge: "lower",
+  "SL squat": "lower",
+  "SL hinge": "lower",
+  "Hinge/glute": "lower",
+  Frontal: "lower",
+  Carry: "lower",
+  "Anti-lateral": "lower",
+  "H-push": "upper",
+  "V-push": "upper",
+  "H-pull": "upper",
+  "V-pull": "upper",
+  "H-pull/posture": "upper",
+  "Anti-rotation": "upper",
+  Rotation: "upper"
+};
 
 function gymExercise(
   id: string,
@@ -21,7 +49,8 @@ function gymExercise(
     cues: substitution ? `Busy-gym sub: ${substitution}` : "",
     description,
     videoUrl,
-    substitution
+    substitution,
+    loadRegion: LOAD_REGION_BY_PATTERN[pattern]
   };
 }
 

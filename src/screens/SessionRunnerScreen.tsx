@@ -1,9 +1,13 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState, type CSSProperties } from "react";
 import { db } from "../db/schema";
+import { advanceToNextBlock, checkBlockTransitionStatus } from "../db/blockTransitionIO";
+import { exportSessionPackage, recomputeAndPersistProgressionStates } from "../db/transferIO";
+import { shareOrDownloadJSON } from "../components/fileTransfer";
 import RestTimer from "../components/RestTimer";
+import MetricsScreen from "./MetricsScreen";
 import { C, sans } from "../theme/tokens";
-import type { ExercisePrescription, LadderRung, SetLog, Venue } from "../db/types";
+import type { ExercisePrescription, LadderRung, ProgressionState, SetLog, VariationLadder, Venue } from "../db/types";
 
 // Appends a YouTube start-time param when the rung has a specific in-video timestamp.
 function withTimestamp(url: string, timestampSec?: number): string {
@@ -34,6 +38,9 @@ export default function SessionRunnerScreen({ templateId, onDone }: SessionRunne
   const [sessionLogId, setSessionLogId] = useState<string | null>(null);
   const [startedAt] = useState(() => new Date());
   const [complete, setComplete] = useState(false);
+  const [transitionDue, setTransitionDue] = useState(false);
+  const [showRomPrompt, setShowRomPrompt] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +77,27 @@ export default function SessionRunnerScreen({ templateId, onDone }: SessionRunne
     if (!sessionLogId) return;
     const durationMin = Math.round((Date.now() - startedAt.getTime()) / 60000);
     await db.sessionLog.update(sessionLogId, { completed: true, durationMin });
+    await recomputeAndPersistProgressionStates();
+    const status = await checkBlockTransitionStatus();
+    setTransitionDue(status?.shouldTransition ?? false);
     setComplete(true);
+  }
+
+  async function exportPackage() {
+    if (!sessionLogId) return;
+    const pkg = await exportSessionPackage(sessionLogId);
+    await shareOrDownloadJSON(`swing-gains-session-${sessionLogId}.json`, pkg);
+    setExportNotice("Session package ready — shared or downloaded.");
+  }
+
+  async function continueAfterRom() {
+    await advanceToNextBlock();
+    setShowRomPrompt(false);
+    onDone();
+  }
+
+  if (complete && showRomPrompt) {
+    return <MetricsScreen romPromptOnly onDone={continueAfterRom} />;
   }
 
   if (complete) {
@@ -80,26 +107,24 @@ export default function SessionRunnerScreen({ templateId, onDone }: SessionRunne
         <p style={{ color: C.textMuted }}>
           {setLogs.length} sets logged across {template.exercisePrescriptions.length} exercises.
         </p>
-        <button
-          disabled
-          title="Session-package export/import lands in P2"
-          style={{
-            width: "100%",
-            padding: "14px 0",
-            background: C.warmGrey,
-            color: C.textMuted,
-            border: "none",
-            borderRadius: 10,
-            fontSize: 15,
-            fontWeight: 700,
-            marginBottom: 12
-          }}
-        >
-          Export session package (P2)
+        {transitionDue && (
+          <div style={{ background: C.warmGrey, borderRadius: 10, padding: 12, fontSize: 13, marginBottom: 12 }}>
+            This block is due to transition. Run the ROM self-tests to continue.
+          </div>
+        )}
+        {exportNotice && <div style={{ fontSize: 13, color: C.ok, marginBottom: 12 }}>{exportNotice}</div>}
+        <button onClick={exportPackage} style={{ ...secondaryBtn, marginBottom: 12 }}>
+          Export session package
         </button>
-        <button onClick={onDone} style={primaryBtn}>
-          Back to Next Up
-        </button>
+        {transitionDue ? (
+          <button onClick={() => setShowRomPrompt(true)} style={{ ...primaryBtn, background: C.copper }}>
+            Run ROM tests &amp; start next block
+          </button>
+        ) : (
+          <button onClick={onDone} style={primaryBtn}>
+            Back to Next Up
+          </button>
+        )}
       </div>
     );
   }
@@ -154,6 +179,8 @@ export default function SessionRunnerScreen({ templateId, onDone }: SessionRunne
               videoTimestampSec={rung?.timestampSec}
               existingSetLogs={exerciseSetLogs}
               restSeconds={restSecondsFor(prescription.order)}
+              ladder={ladder}
+              progression={progression}
             />
           );
         })}
@@ -175,6 +202,8 @@ interface ExerciseCardProps {
   videoTimestampSec?: number;
   existingSetLogs: SetLog[];
   restSeconds: number;
+  ladder?: VariationLadder;
+  progression?: ProgressionState;
 }
 
 function ExerciseCard({
@@ -186,12 +215,15 @@ function ExerciseCard({
   videoUrl,
   videoTimestampSec,
   existingSetLogs,
-  restSeconds
+  restSeconds,
+  ladder,
+  progression
 }: ExerciseCardProps) {
   const [reps, setReps] = useState("");
   const [loadKg, setLoadKg] = useState("");
   const [rpe, setRpe] = useState<number | null>(null);
   const [showTimer, setShowTimer] = useState(false);
+  const [ladderAdvanceConfirmed, setLadderAdvanceConfirmed] = useState(false);
 
   async function logSet() {
     const setNo = existingSetLogs.length + 1;
@@ -205,6 +237,24 @@ function ExerciseCard({
       rpe
     });
     setShowTimer(true);
+  }
+
+  // Ladder rung advance offer (spec §3.4 LD-1) — never forced; the streak must already be
+  // >=2 (two consecutive prior hits) before this is even shown, and confirming attaches the
+  // flag to the last logged set this session so it feeds the recompute-from-logs replay.
+  const rungOfferAvailable =
+    !!ladder &&
+    !!progression &&
+    progression.streakCount >= 2 &&
+    progression.currentLadderRung != null &&
+    progression.currentLadderRung < ladder.rungs.length - 1;
+  const nextRungName = ladder && progression?.currentLadderRung != null ? ladder.rungs[progression.currentLadderRung + 1]?.name : undefined;
+
+  async function confirmLadderAdvance() {
+    const last = [...existingSetLogs].sort((a, b) => b.setNo - a.setNo)[0];
+    if (!last) return;
+    await db.setLog.update(last.id, { ladderAdvanceConfirmed: true });
+    setLadderAdvanceConfirmed(true);
   }
 
   const rpeSuffix = prescription.rpeDisplay
@@ -223,6 +273,9 @@ function ExerciseCard({
             {prescription.sets} x {prescription.repsDisplay}
             {rpeSuffix}
           </div>
+          {venue === "gym" && progression?.currentPrescribedLoadKg != null && (
+            <div style={{ fontSize: 12, color: C.slate, fontWeight: 700 }}>Prescribed: {progression.currentPrescribedLoadKg} kg</div>
+          )}
           {prescription.tempo && <div style={{ fontSize: 12, color: C.textMuted }}>Tempo {prescription.tempo}</div>}
           {prescription.note && (
             <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>{prescription.note}</div>
@@ -261,6 +314,23 @@ function ExerciseCard({
               {s.rpe ? `, RPE ${s.rpe}` : ""}
             </div>
           ))}
+        </div>
+      )}
+
+      {existingSetLogs.length > 0 && rungOfferAvailable && (
+        <div style={{ marginTop: 10, background: C.warmGrey, borderRadius: 8, padding: 10 }}>
+          {ladderAdvanceConfirmed ? (
+            <div style={{ fontSize: 12, color: C.ok }}>Advance confirmed — takes effect next session.</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: C.text, marginBottom: 6 }}>
+                Two hits in a row — ready for {nextRungName ?? "the next rung"}?
+              </div>
+              <button onClick={confirmLadderAdvance} style={{ ...smallBtn, marginRight: 8 }}>
+                Advance next session
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -335,6 +405,29 @@ const primaryBtn: CSSProperties = {
   border: "none",
   borderRadius: 10,
   fontSize: 15,
+  fontWeight: 700,
+  cursor: "pointer"
+};
+
+const secondaryBtn: CSSProperties = {
+  width: "100%",
+  padding: "14px 0",
+  background: C.white,
+  color: C.slate,
+  border: `1px solid ${C.slate}`,
+  borderRadius: 10,
+  fontSize: 15,
+  fontWeight: 700,
+  cursor: "pointer"
+};
+
+const smallBtn: CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  border: "none",
+  background: C.slate,
+  color: C.white,
+  fontSize: 12,
   fontWeight: 700,
   cursor: "pointer"
 };

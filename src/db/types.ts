@@ -87,6 +87,8 @@ export interface SessionTemplate {
   notes?: string;
 }
 
+export type LoadRegion = "upper" | "lower";
+
 export interface Exercise {
   id: string;
   name: string;
@@ -106,6 +108,16 @@ export interface Exercise {
   // it, since the anchor's own videoUrl can only cover one rung's demonstration at a time.
   videoUrl: string | null;
   substitution?: string;
+  // P2 addition (flagged): spec §3.4 rule 2 sets the double-progression increment by
+  // "upper body" vs "lower body", but neither spec §7 nor the exercise library carries an
+  // explicit upper/lower field — only a free-text `pattern` (Squat, Hinge, H-push, etc).
+  // Populated in src/data/exercises.ts from `pattern` via a documented mapping, gym
+  // exercises only. Left undefined for every home exercise (bodyweight/ladder-progressed,
+  // not kg-incremented) and for gym patterns that are power/throw/plyometric work (Power,
+  // Rotation-power — Block 4/5/7 "bar speed intent" work per spec §3.2, not a load-
+  // progression signal) — those are excluded from double progression entirely rather than
+  // guessing a region for them.
+  loadRegion?: LoadRegion;
 }
 
 // P1.1 addition: per-rung video detail merged from docs/ladder-video-links.csv, joined on
@@ -151,6 +163,14 @@ export interface SetLog {
   loadKg: number | null;
   rpe: number | null;
   tempo?: string;
+  // P2 addition (flagged): spec §7 says ProgressionState is "derived, always recomputable
+  // from logs (merge-safe by construction)" — but ladder rung advancement (spec §3.4 LD-1)
+  // is a user-confirmed decision, not something derivable from reps/RPE alone. To keep it
+  // recomputable (required for TR-3's recompute-equals-replay guarantee), the confirmation
+  // itself is logged as a flag on the SetLog the user was looking at when they tapped
+  // "advance rung" — set true on at most one SetLog per exercise per session. Never set by
+  // the engine; only by the explicit UI confirm action.
+  ladderAdvanceConfirmed?: boolean;
 }
 
 export interface ProgressionState {
