@@ -1,0 +1,18 @@
+date,block,sessionType,venue,exercise,setNo,reps,loadKg,rpe,metricType,metricValue,unit,device
+2026-01-05,Block 1: Anatomical adaptation + baseline,G1,gym,Back squat (barbell),1,10,40,7,,,,
+2026-01-05,Block 1: Anatomical adaptation + baseline,G1,gym,Bench press (barbell),1,10,30,7,,,,
+2026-01-10,,,,,,,,,swing_speed,92,mph,R10
+2026-01-19,Block 1: Anatomical adaptation + baseline,G1,gym,Back squat (barbell),1,10,42.5,7,,,,
+2026-01-19,Block 1: Anatomical adaptation + baseline,G1,gym,Bench press (barbell),1,10,32.5,7,,,,
+2026-01-19,,,,,,,,,rom_hip,1,grade,
+2026-02-02,Block 2: Strength foundation,G1,gym,Back squat (barbell),1,10,45,7,,,,
+2026-02-02,Block 2: Strength foundation,G1,gym,Bench press (barbell),1,10,35,7,,,,
+2026-02-16,Block 2: Strength foundation,G1,gym,Back squat (barbell),1,10,45,8,,,,
+2026-02-16,Block 2: Strength foundation,G1,gym,Bench press (barbell),1,10,36,7,,,,
+2026-02-20,,,,,,,,,swing_speed,93,mph,R10
+2026-03-02,Block 2: Strength foundation,G1,gym,Back squat (barbell),1,10,45,8,,,,
+2026-03-02,Block 2: Strength foundation,G1,gym,Bench press (barbell),1,10,37.5,7,,,,
+2026-03-02,,,,,,,,,rom_hip,1,grade,
+2026-03-10,,,,,,,,,swing_speed,93,mph,R10
+2026-03-16,Block 3: Strength,G1,gym,Back squat (barbell),1,10,47.5,7,,,,
+2026-03-16,Block 3: Strength,G1,gym,Bench press (barbell),1,10,38.75,7,,,,

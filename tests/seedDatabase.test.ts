@@ -31,6 +31,14 @@ describe("seedDatabase (Dexie, fake-indexeddb)", () => {
     expect(await db.programme.count()).toBe(1);
   });
 
+  it("coalesces truly-concurrent calls without a duplicate-write error (StrictMode double-invoke)", async () => {
+    const [a, b] = await Promise.allSettled([seedDatabase("master"), seedDatabase("master")]);
+    expect(a.status).toBe("fulfilled");
+    expect(b.status).toBe("fulfilled");
+    expect(await db.exercise.count()).toBe(49);
+    expect(await db.programme.count()).toBe(1);
+  });
+
   it("never overwrites existing session logs", async () => {
     await seedDatabase("master");
     await db.sessionLog.add({

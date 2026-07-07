@@ -35,6 +35,12 @@ export interface ProgressionInput {
   setLogs: SetLog[];
   currentBlockId: string;
   nowISO: string; // fallback lastUpdated for state that has never been touched by a log
+  // P3 stub (feature-flagged, off by default — see src/config/featureFlags.ts): when true,
+  // every lift's streakCount is cleared the moment the replay crosses a year-2 cycle wrap
+  // (block sequence decreasing, i.e. Block 8 -> Block 2). Loads/rungs are untouched. Passed
+  // in rather than imported directly, so this pure function stays a function of its
+  // arguments only — the Dexie adapter (src/db/transferIO.ts) is what reads the flag.
+  year2StreakReset?: boolean;
 }
 
 interface MutableState {
@@ -124,12 +130,21 @@ export function recomputeProgressionStates(input: ProgressionInput): Progression
   // such exemption, and Block 1's own home templates restate explicit numeric rung targets
   // ("rung target 15") specifically so LD-1 is evaluable from day one. So loaded-lift
   // progression skips Block 1 (calibration only); ladder progression does not.
+  let previousBlockSequence: number | undefined;
   for (const session of completedSessionsAsc) {
     const template = templateById.get(session.templateId);
     if (!template) continue;
     const block = blockById.get(template.blockId);
     if (!block) continue;
     const isCalibrationBlock = !!block1 && block.sequence <= block1.sequence;
+
+    // Year-2 cycle wrap (stub, flag-gated): block sequence only ever decreases here when the
+    // programme has wrapped from Block 8 back to Block 2 (spec §3.2 cycling) — that's the one
+    // point where "a new cycle started" is derivable from the log history alone.
+    if (input.year2StreakReset && previousBlockSequence != null && block.sequence < previousBlockSequence) {
+      for (const s of state.values()) s.streakCount = 0;
+    }
+    previousBlockSequence = block.sequence;
 
     for (const ex of exercises) {
       const prescription = template.exercisePrescriptions.find((p) => p.exerciseId === ex.id);

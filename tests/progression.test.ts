@@ -418,3 +418,50 @@ describe("AT-P2 LD-1: ladder rung advancement", () => {
     expect(result.find((p) => p.exerciseId === "EX-LADDER")?.streakCount).toBe(0);
   });
 });
+
+describe("P3: year-2 cycle streak-reset stub (feature-flagged, off by default)", () => {
+  const BLOCK8: Block = { id: "b8", sequence: 8, name: "Stability", emphasis: "", sessionTemplateIds: [], transitionRules: RULES };
+  const ALL_BLOCKS = [BLOCK1, BLOCK2, BLOCK8];
+
+  const templateB2 = tmpl("t-b2", "b2", [rx("EX-UP", "8-10")]);
+  const templateB8 = tmpl("t-b8", "b8", []); // no EX-UP prescription — just moves the replay through block 8
+
+  // Block 2 (year 1): one below-range set builds streak to 1. Block 8: an unrelated session
+  // (no EX-UP log). Block 2 again (year 2 wrap, sequence 8 -> 2): another below-range set —
+  // without a reset this is the SECOND below-range hit (streak 2, triggers the -10% cut);
+  // with the stub's reset it's treated as the first (streak 1, no cut).
+  const sessionLogs = [
+    sessionLog("s1", "t-b2", "2026-01-01"),
+    sessionLog("s2", "t-b8", "2026-06-01"),
+    sessionLog("s3", "t-b2", "2027-01-01")
+  ];
+  const setLogs = [
+    setLog("set1", "s1", "EX-UP", 1, 5, 40, 7), // below min (8) -> streak 0 -> 1
+    setLog("set2", "s3", "EX-UP", 1, 5, 40, 7) // below min again
+  ];
+
+  function recomputeCycled(year2StreakReset: boolean) {
+    return recomputeProgressionStates({
+      exercises: [gymExercise("EX-UP", "upper")],
+      ladders: [],
+      blocks: ALL_BLOCKS,
+      sessionTemplates: [templateB2, templateB8],
+      sessionLogs,
+      setLogs,
+      currentBlockId: "b2",
+      nowISO: "2027-01-01T00:00:00.000Z",
+      year2StreakReset
+    });
+  }
+
+  it("off by default: the year-2 below-range set is the second consecutive hit and triggers the -10% cut", () => {
+    const result = recomputeCycled(false);
+    expect(result.find((p) => p.exerciseId === "EX-UP")?.currentPrescribedLoadKg).toBe(36);
+  });
+
+  it("flag on: the cycle wrap clears the streak, so year 2's set is treated as the first below-range hit", () => {
+    const result = recomputeCycled(true);
+    expect(result.find((p) => p.exerciseId === "EX-UP")?.currentPrescribedLoadKg).toBe(40);
+    expect(result.find((p) => p.exerciseId === "EX-UP")?.streakCount).toBe(1);
+  });
+});

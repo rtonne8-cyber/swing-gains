@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import BottomNav, { type NavScreen } from "./components/BottomNav";
 import UpdateToast from "./components/UpdateToast";
 import { seedDatabase } from "./db/seed";
+import ExerciseDetailScreen from "./screens/ExerciseDetailScreen";
 import MetricsScreen from "./screens/MetricsScreen";
 import NextUpScreen from "./screens/NextUpScreen";
 import ProgrammeMapScreen from "./screens/ProgrammeMapScreen";
@@ -10,7 +11,10 @@ import SessionRunnerScreen from "./screens/SessionRunnerScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import { C, sans } from "./theme/tokens";
 
-type Route = { screen: NavScreen } | { screen: "session"; templateId: string };
+type Route =
+  | { screen: NavScreen }
+  | { screen: "session"; templateId: string }
+  | { screen: "exercise-detail"; exerciseId: string };
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -42,15 +46,20 @@ export default function App() {
         {route.screen === "next-up" && (
           <NextUpScreen onStartSession={(templateId) => setRoute({ screen: "session", templateId })} />
         )}
-        {route.screen === "programme" && <ProgrammeMapScreen />}
+        {route.screen === "programme" && (
+          <ProgrammeMapScreen onSelectExercise={(exerciseId) => setRoute({ screen: "exercise-detail", exerciseId })} />
+        )}
         {route.screen === "progress" && <ProgressScreen />}
         {route.screen === "metrics" && <MetricsScreen />}
         {route.screen === "settings" && <SettingsScreen />}
         {route.screen === "session" && (
           <SessionRunnerScreen templateId={route.templateId} onDone={() => setRoute({ screen: "next-up" })} />
         )}
+        {route.screen === "exercise-detail" && (
+          <ExerciseDetailScreen exerciseId={route.exerciseId} onBack={() => setRoute({ screen: "programme" })} />
+        )}
       </div>
-      {route.screen !== "session" && (
+      {route.screen !== "session" && route.screen !== "exercise-detail" && (
         <BottomNav active={route.screen} onNavigate={(screen) => setRoute({ screen })} />
       )}
       <UpdateToast />

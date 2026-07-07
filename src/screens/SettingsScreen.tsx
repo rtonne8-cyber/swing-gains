@@ -1,9 +1,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState, type CSSProperties } from "react";
 import { db } from "../db/schema";
-import { downloadJSON, readJSONFile } from "../components/fileTransfer";
+import { downloadJSON, readJSONFile, shareOrDownloadCSV } from "../components/fileTransfer";
 import { evaluateBlockTransition } from "../engine/blockTransition";
 import { computeNextUp } from "../engine/queues";
+import { buildCsvExport } from "../db/csvExportIO";
 import { exportFullState, importFullState, importSessionPackage } from "../db/transferIO";
 import { FULL_STATE_CONFIRMATION_PHRASE, type FullStateExport } from "../transfer/fullState";
 import type { SessionPackage } from "../transfer/sessionPackage";
@@ -45,7 +46,7 @@ export default function SettingsScreen() {
 
       <SessionPackageSection />
       <FullStateSection />
-      <CsvExportStub />
+      <CsvExportSection />
 
       <Section title="Units">
         <div style={{ fontSize: 13, color: C.textMuted }}>Load: kg &middot; Swing speed: mph &middot; ROM reach: cm</div>
@@ -163,15 +164,25 @@ function FullStateSection() {
   );
 }
 
-function CsvExportStub() {
+function CsvExportSection() {
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function handleExport() {
+    const csv = await buildCsvExport();
+    await shareOrDownloadCSV(`swing-gains-export-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    setNotice("CSV ready — shared or downloaded. Import into the Swing Gains Progress Tracker's Data_Import sheet.");
+  }
+
   return (
     <Section title="CSV export">
-      <button disabled title="CSV export lands in P3" style={{ ...smallBtn, background: C.warmGrey, color: C.textMuted, cursor: "not-allowed" }}>
-        Export CSV (P3)
+      <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
+        One row per logged set and per metric entry (spec §8.1). Note: the reps column is
+        seconds held wherever the logged exercise's rung was a timed hold at the time.
+      </div>
+      <button onClick={handleExport} style={smallBtn}>
+        Export CSV
       </button>
-      {/* Reminder for whoever builds the §8.1 CSV export: SetLog.reps is seconds, not a rep
-          count, wherever the logged exercise's current rung is time-targeted (Library
-          v1.0.1) — see the caveat on SetLog.reps in src/db/types.ts. */}
+      {notice && <div style={{ fontSize: 13, color: C.ok, marginTop: 10 }}>{notice}</div>}
     </Section>
   );
 }

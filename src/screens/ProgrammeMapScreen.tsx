@@ -3,7 +3,11 @@ import { useState } from "react";
 import { db } from "../db/schema";
 import { C, sans } from "../theme/tokens";
 
-export default function ProgrammeMapScreen() {
+interface ProgrammeMapScreenProps {
+  onSelectExercise: (exerciseId: string) => void;
+}
+
+export default function ProgrammeMapScreen({ onSelectExercise }: ProgrammeMapScreenProps) {
   const programme = useLiveQuery(() => db.programme.toCollection().first(), []);
   const blocks = useLiveQuery(() => db.block.orderBy("sequence").toArray(), []) ?? [];
   const exercises = useLiveQuery(() => db.exercise.toArray(), []) ?? [];
@@ -46,9 +50,26 @@ export default function ProgrammeMapScreen() {
                 .map((p) => {
                   const ex = exercises.find((e) => e.id === p.exerciseId);
                   return (
-                    <div key={p.order} style={{ fontSize: 13, color: C.text, padding: "3px 0" }}>
-                      {ex?.name ?? p.exerciseId} &mdash; {p.sets} x {p.repsDisplay}
-                    </div>
+                    <button
+                      key={p.order}
+                      onClick={() => ex && onSelectExercise(ex.id)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        padding: "3px 0",
+                        fontSize: 13,
+                        color: C.text,
+                        cursor: ex ? "pointer" : "default"
+                      }}
+                    >
+                      <span style={{ textDecoration: ex ? "underline" : "none", textDecorationColor: C.line }}>
+                        {ex?.name ?? p.exerciseId}
+                      </span>{" "}
+                      &mdash; {p.sets} x {p.repsDisplay}
+                    </button>
                   );
                 })}
               {t.notes && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>{t.notes}</div>}

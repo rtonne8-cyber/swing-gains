@@ -1,6 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/schema";
+import { blockPeriods } from "../engine/blockPeriods";
 import { loadTrendSeries, romTrend, sessionFrequencyStrip, swingSpeedTrend, type MetricPoint } from "../engine/progressViews";
+import { frequencyDriftSignal, romStagnationSignal, speedPlateauSignal, stalledLiftSignal } from "../engine/weaknessSignals";
 import { C, sans } from "../theme/tokens";
 
 const ROM_TESTS: { type: "rom_thoracic" | "rom_hip" | "rom_reach"; label: string }[] = [
@@ -15,6 +17,7 @@ export default function ProgressScreen() {
   const setLogs = useLiveQuery(() => db.setLog.toArray(), []) ?? [];
   const metricLogs = useLiveQuery(() => db.metricLog.toArray(), []) ?? [];
   const progressionStates = useLiveQuery(() => db.progressionState.toArray(), []) ?? [];
+  const sessionTemplates = useLiveQuery(() => db.sessionTemplate.toArray(), []) ?? [];
 
   const loadedLifts = exercises.filter(
     (e) => e.venue === "gym" && e.loadRegion && progressionStates.some((p) => p.exerciseId === e.id && p.currentPrescribedLoadKg != null)
@@ -22,6 +25,31 @@ export default function ProgressScreen() {
 
   const speedSeries = swingSpeedTrend(metricLogs);
   const frequency = sessionFrequencyStrip(sessionLogs, 8, new Date().toISOString());
+  const periods = blockPeriods(sessionLogs, sessionTemplates);
+
+  // Weakness panel (spec §8.2's four RAG signals, surfaced in-app as well as in the offline
+  // tracker — see src/engine/weaknessSignals.ts). This also carries the "swing-speed
+  // correlation view" (P3 scope): the speed-plateau signal is exactly that correlation, made
+  // actionable rather than just plotted.
+  const weaknessFlags: { label: string; detail: string }[] = [];
+  for (const ex of loadedLifts) {
+    const series = loadTrendSeries(ex.id, sessionLogs, setLogs);
+    if (stalledLiftSignal(series, periods)) {
+      weaknessFlags.push({ label: `${ex.name} — stalled`, detail: "No load increase across the last full block." });
+    }
+    if (speedPlateauSignal(speedSeries, series, periods)) {
+      weaknessFlags.push({ label: `${ex.name} — speed plateau`, detail: "Load rose but swing speed didn't, in the last full block." });
+    }
+  }
+  for (const { type, label } of ROM_TESTS) {
+    const series = romTrend(metricLogs, type);
+    if (romStagnationSignal(series, periods)) {
+      weaknessFlags.push({ label: `${label} — stagnant`, detail: "No grade change across the last two block transitions." });
+    }
+  }
+  if (frequencyDriftSignal(frequency)) {
+    weaknessFlags.push({ label: "Session frequency drifting", detail: "Rolling average below 2 sessions/week." });
+  }
 
   return (
     <div style={{ fontFamily: sans, padding: 20, paddingBottom: 90 }}>
@@ -88,6 +116,31 @@ export default function ProgressScreen() {
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section title="Weakness panel">
+        {weaknessFlags.length === 0 ? (
+          <Empty text="No weakness signals right now." />
+        ) : (
+          weaknessFlags.map((f) => (
+            <div
+              key={f.label}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8,
+                padding: "8px 0",
+                borderBottom: `1px solid ${C.line}`
+              }}
+            >
+              <span style={{ width: 10, height: 10, borderRadius: 5, background: C.danger, marginTop: 4, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{f.label}</div>
+                <div style={{ fontSize: 12, color: C.textMuted }}>{f.detail}</div>
+              </div>
+            </div>
+          ))
+        )}
       </Section>
     </div>
   );

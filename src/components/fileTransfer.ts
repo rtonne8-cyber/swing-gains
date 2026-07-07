@@ -33,6 +33,36 @@ export async function shareOrDownloadJSON(filename: string, data: unknown): Prom
   downloadJSON(filename, data);
 }
 
+export function downloadCSV(filename: string, csv: string): void {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function shareOrDownloadCSV(filename: string, csv: string): Promise<void> {
+  const nav = navigator as Navigator & {
+    canShare?: (data: { files: File[] }) => boolean;
+    share?: (data: { files: File[]; title?: string }) => Promise<void>;
+  };
+
+  if (nav.share && nav.canShare) {
+    const file = new File([csv], filename, { type: "text/csv" });
+    if (nav.canShare({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: filename });
+        return;
+      } catch {
+        // user cancelled the share sheet, or the platform rejected it — fall back to download
+      }
+    }
+  }
+  downloadCSV(filename, csv);
+}
+
 export function readJSONFile<T>(file: File): Promise<T> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

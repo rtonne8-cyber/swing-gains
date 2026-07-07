@@ -2,6 +2,7 @@
 // Session runner) calls these; all decision logic lives in src/transfer and
 // src/engine/progression so it stays unit-testable without a real IndexedDB.
 import { db } from "./schema";
+import { FEATURE_FLAGS } from "../config/featureFlags";
 import { recomputeProgressionStates } from "../engine/progression";
 import {
   buildSessionPackage,
@@ -37,7 +38,8 @@ export async function recomputeAndPersistProgressionStates(): Promise<void> {
     sessionLogs,
     setLogs,
     currentBlockId: programme.currentBlockId,
-    nowISO: new Date().toISOString()
+    nowISO: new Date().toISOString(),
+    year2StreakReset: FEATURE_FLAGS.year2StreakReset
   });
   await db.progressionState.bulkPut(states);
 }
