@@ -251,6 +251,40 @@ Closes deviation 4 above. Summary for the record:
   script in P3 given how easy it now is for future hand-maintained additions near
   script-owned code to interact this way.
 
+## P2.2 — L4 set-input label fix (CLOSED)
+
+Closes the L4 input-label flag raised at the end of P2.1: the Session runner's set-logging
+input was labelled "Reps" everywhere, including L4's three timed-hold rungs, where the logged
+number is actually seconds held.
+
+- **New pure helper** `src/engine/ladderDisplay.ts` — `resolveSetInputTarget(rung)` derives
+  the label (`"Reps"` or `"Secs"`) and a target string (e.g. `"target 40/side"`,
+  `"target 15"`) purely from the current rung's `repTarget`/`timeTargetSec`/`perSide`. Returns
+  `undefined` for anything with no current rung (every gym exercise, and any home exercise
+  that isn't ladder-anchored), so loaded lifts are entirely untouched by construction, not by
+  a venue check.
+- **Session runner:** the set-input's placeholder now reads `setInputTarget?.label ?? "Reps"`,
+  and an inline `"{label} — {targetText}"` line (e.g. "Secs — target 40/side") renders above
+  the input whenever a target is resolved. Verified live: Block 1's Side plank ladder (rung 0,
+  "Knees", 30s/side) now shows "Secs — target 30/side" and the input placeholder reads "Secs";
+  every other card (gym and non-timed home exercises) is unchanged.
+- **Tests:** `tests/ladderDisplay.test.ts` (5 tests) — this project has no jsdom/
+  `@testing-library` component-rendering setup, so per CLAUDE.md's "UI stays thin, engine is
+  pure and Vitest-tested" split, the actual label/target-string decision was pulled out into
+  the tested pure function rather than adding new test infrastructure for one component; the
+  Session runner itself just calls it. Covers: Secs label + target text for a time-targeted
+  rung, Reps label + target text for a rep-targeted rung, the `/side` suffix present/absent,
+  and `undefined` for a non-ladder exercise.
+- **CSV export note (spec §8.1, not yet built):** added a comment on `SetLog.reps` in
+  `src/db/types.ts` and a matching note on the CSV export stub in `SettingsScreen.tsx` —
+  whoever builds the P3 CSV export needs to know the `reps` column is seconds wherever the
+  logged exercise's *current* rung at that point in time was time-targeted; this isn't stored
+  per-row and must be re-derived by joining against the ladder seed.
+- **Gym flow:** unaffected — verified by construction (`resolveSetInputTarget` only ever
+  receives a rung for ladder-anchored home exercises) and by the live check above.
+
+74/74 tests passing, clean `tsc`/build.
+
 ## Open items for P3
 
 - CSV export (§8.1) and the Progress Tracker workbook — not started, correctly stubbed/disabled
@@ -264,9 +298,9 @@ Closes deviation 4 above. Summary for the record:
         home template (e.g. H-01 squat ladder, prescribed as "current rung" — now evaluable
         against the rung's own repTarget per the Library v1.0.1 fix) and that declining, then
         confirming later, still advances correctly.
-  - [ ] Spot-check a couple of L4 (side plank) rungs on-device — rungs 1-3 are timed holds
-        (the Reps input doubles as "seconds held"), rungs 4-5 are counted reps; confirm the
-        UI distinction is clear enough in practice or flag if it needs its own label.
+  - [ ] Spot-check a couple of L4 (side plank) rungs on-device — the set-input now labels
+        itself "Secs" with an inline "target Ns/side" for timed rungs (see P2.2 below);
+        confirm that reads clearly in practice.
   - [ ] Round-trip a session package: log a session on the Pixel, export, import on the iPad,
         confirm it's idempotent on re-import.
   - [ ] Full-state export from iPad, import onto a freshly-seeded Pixel, confirm no

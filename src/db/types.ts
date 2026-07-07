@@ -170,6 +170,14 @@ export interface SetLog {
   sessionLogId: string;
   exerciseId: string;
   setNo: number;
+  // Library v1.0.1: for a home exercise whose CURRENT rung is time-targeted
+  // (VariationLadder.rungs[n].timeTargetSec defined), this value is seconds held, not a rep
+  // count — there is no separate field for it (see src/engine/ladderDisplay.ts, which derives
+  // the Session runner's "Reps"/"Secs" input label from the rung so this is never ambiguous
+  // in the UI). P3's CSV export (spec §8.1) must carry the same caveat in its column
+  // documentation: the `reps` column is seconds wherever the logged exercise's rung type at
+  // that point in time was time-targeted (derivable by re-joining against the ladder seed —
+  // not itself recorded per row).
   reps: number | null;
   loadKg: number | null;
   rpe: number | null;

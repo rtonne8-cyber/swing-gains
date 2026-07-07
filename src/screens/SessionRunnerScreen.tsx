@@ -3,6 +3,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { db } from "../db/schema";
 import { advanceToNextBlock, checkBlockTransitionStatus } from "../db/blockTransitionIO";
 import { exportSessionPackage, recomputeAndPersistProgressionStates } from "../db/transferIO";
+import { resolveSetInputTarget } from "../engine/ladderDisplay";
 import { shareOrDownloadJSON } from "../components/fileTransfer";
 import RestTimer from "../components/RestTimer";
 import MetricsScreen from "./MetricsScreen";
@@ -180,6 +181,7 @@ export default function SessionRunnerScreen({ templateId, onDone }: SessionRunne
               existingSetLogs={exerciseSetLogs}
               restSeconds={restSecondsFor(prescription.order)}
               ladder={ladder}
+              rung={rung}
               progression={progression}
             />
           );
@@ -203,6 +205,7 @@ interface ExerciseCardProps {
   existingSetLogs: SetLog[];
   restSeconds: number;
   ladder?: VariationLadder;
+  rung?: LadderRung;
   progression?: ProgressionState;
 }
 
@@ -217,6 +220,7 @@ function ExerciseCard({
   existingSetLogs,
   restSeconds,
   ladder,
+  rung,
   progression
 }: ExerciseCardProps) {
   const [reps, setReps] = useState("");
@@ -249,6 +253,11 @@ function ExerciseCard({
     progression.currentLadderRung != null &&
     progression.currentLadderRung < ladder.rungs.length - 1;
   const nextRungName = ladder && progression?.currentLadderRung != null ? ladder.rungs[progression.currentLadderRung + 1]?.name : undefined;
+
+  // Library v1.0.1 follow-up: label the set-input by the current rung's target type (a timed
+  // hold vs a rep count) rather than always saying "Reps" — gym/loaded lifts have no rung, so
+  // this is undefined for them and the input falls back to its original "Reps" placeholder.
+  const setInputTarget = resolveSetInputTarget(rung);
 
   async function confirmLadderAdvance() {
     const last = [...existingSetLogs].sort((a, b) => b.setNo - a.setNo)[0];
@@ -334,11 +343,17 @@ function ExerciseCard({
         </div>
       )}
 
+      {setInputTarget && (
+        <div style={{ fontSize: 12, color: C.slate, fontWeight: 700, marginTop: 10 }}>
+          {setInputTarget.label} — {setInputTarget.targetText}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <input
           type="number"
           inputMode="numeric"
-          placeholder="Reps"
+          placeholder={setInputTarget?.label ?? "Reps"}
           value={reps}
           onChange={(e) => setReps(e.target.value)}
           style={inputStyle}

@@ -169,6 +169,9 @@ function CsvExportStub() {
       <button disabled title="CSV export lands in P3" style={{ ...smallBtn, background: C.warmGrey, color: C.textMuted, cursor: "not-allowed" }}>
         Export CSV (P3)
       </button>
+      {/* Reminder for whoever builds the §8.1 CSV export: SetLog.reps is seconds, not a rep
+          count, wherever the logged exercise's current rung is time-targeted (Library
+          v1.0.1) — see the caveat on SetLog.reps in src/db/types.ts. */}
     </Section>
   );
 }
