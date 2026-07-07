@@ -119,12 +119,17 @@ export function recomputeProgressionStates(input: ProgressionInput): Progression
     }
   }
 
-  // ---- Replay every completed session from Block 2 onward, in order.
+  // ---- Replay every completed session, in order. Spec §3.4 rule 4 ("Block 1 has no
+  // prescriptions") is scoped to loaded gym lifts only — the bodyweight/ladder rules carry no
+  // such exemption, and Block 1's own home templates restate explicit numeric rung targets
+  // ("rung target 15") specifically so LD-1 is evaluable from day one. So loaded-lift
+  // progression skips Block 1 (calibration only); ladder progression does not.
   for (const session of completedSessionsAsc) {
     const template = templateById.get(session.templateId);
     if (!template) continue;
     const block = blockById.get(template.blockId);
-    if (!block || (block1 && block.sequence <= block1.sequence)) continue; // Block 1 = calibration only
+    if (!block) continue;
+    const isCalibrationBlock = !!block1 && block.sequence <= block1.sequence;
 
     for (const ex of exercises) {
       const prescription = template.exercisePrescriptions.find((p) => p.exerciseId === ex.id);
@@ -133,6 +138,7 @@ export function recomputeProgressionStates(input: ProgressionInput): Progression
       if (sessionSetLogs.length === 0) continue;
 
       if (ex.venue === "gym" && ex.loadRegion) {
+        if (isCalibrationBlock) continue;
         applyLoadedLiftSession(getOrCreateLoadedLiftState(ex.id), prescription, sessionSetLogs, ex.loadRegion, session.date);
       } else if (ex.ladderId) {
         const ladder = ladderById.get(ex.ladderId);
@@ -193,6 +199,23 @@ function applyLoadedLiftSession(
   s.lastUpdated = sessionDate;
 }
 
+// Resolves the numeric "hit" target for a ladder session (Library v1.0.1 LD-1 content fix).
+// Template-level explicit targets take precedence where the library restates one (Block 1's
+// "rung target 15" / "rung target 10-12" style prescriptions) — everywhere else (session
+// templates that just say "current rung"), the CURRENT rung's own repTarget/timeTargetSec is
+// used, which is what makes those templates evaluable at all. Reading the rung fresh off
+// `currentRungIndex` each session (rather than caching it) is what makes a decreasing target
+// on advance (e.g. L4's time-per-rep-count crossover) take effect starting the session after
+// the advance, never before.
+function resolveLadderTarget(prescription: ExercisePrescription, ladder: VariationLadder, currentRungIndex: number): number | undefined {
+  const templateTarget = parseRepTarget(prescription.repsDisplay);
+  if (templateTarget) return templateTarget.max;
+
+  const rung = ladder.rungs[currentRungIndex];
+  if (!rung) return undefined;
+  return rung.repTarget ?? rung.timeTargetSec;
+}
+
 function applyLadderSession(
   s: MutableState,
   prescription: ExercisePrescription,
@@ -202,16 +225,16 @@ function applyLadderSession(
 ): void {
   const confirmedThisSession = sessionSetLogs.some((set) => set.ladderAdvanceConfirmed === true);
   const streakBeforeThisSession = s.streakCount;
+  const currentRung = s.currentLadderRung ?? 0;
 
-  const target = parseRepTarget(prescription.repsDisplay);
-  if (target) {
+  const target = resolveLadderTarget(prescription, ladder, currentRung);
+  if (target != null) {
     const hit =
-      sessionSetLogs.every((set) => set.reps != null && set.reps >= target.max) && allSetsRpeWithinCeiling(sessionSetLogs);
+      sessionSetLogs.every((set) => set.reps != null && set.reps >= target) && allSetsRpeWithinCeiling(sessionSetLogs);
     s.streakCount = hit ? s.streakCount + 1 : 0;
     s.lastUpdated = sessionDate;
   }
 
-  const currentRung = s.currentLadderRung ?? 0;
   if (confirmedThisSession && streakBeforeThisSession >= 2 && currentRung < ladder.rungs.length - 1) {
     s.currentLadderRung = currentRung + 1;
     s.streakCount = 0;

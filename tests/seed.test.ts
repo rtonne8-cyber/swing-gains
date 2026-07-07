@@ -32,6 +32,24 @@ describe("AT-P1-1: library seed integrity", () => {
     }
   });
 
+  it("every rung across all 5 ladders has exactly one target type (Library v1.0.1)", () => {
+    // LD-1 content fix: each rung must carry exactly one of repTarget/timeTargetSec, never
+    // both, never neither — validateLibrary enforces this, but this test names it precisely
+    // (rather than folding it into the general "zero orphan references" check) so a
+    // not-yet-migrated ladder fails loudly with its own diagnosis.
+    for (const ladder of LADDERS) {
+      ladder.rungs.forEach((rung, i) => {
+        const hasRepTarget = rung.repTarget !== undefined;
+        const hasTimeTarget = rung.timeTargetSec !== undefined;
+        expect(
+          hasRepTarget !== hasTimeTarget,
+          `ladder ${ladder.id} rung ${i + 1} ("${rung.name}") must have exactly one of repTarget/timeTargetSec`
+        ).toBe(true);
+        expect(typeof rung.perSide, `ladder ${ladder.id} rung ${i + 1} perSide must be a boolean`).toBe("boolean");
+      });
+    }
+  });
+
   it("flags an injected orphan reference (negative control)", () => {
     const brokenTemplates = [
       ...SESSION_TEMPLATES.slice(1),

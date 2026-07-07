@@ -170,16 +170,26 @@ was reviewed by hand against the engine's expectations but not click-tested end-
    ProgressionState "always recomputable from logs." Logging the confirmation as a flag on the
    SetLog the user was looking at when they confirmed keeps it recomputable (needed for TR-3)
    without inventing a second mutable-state store.
-4. **The real seeded content mostly can't drive ladder advancement yet.** Most Block 2+ home
-   session templates prescribe ladder exercises as `"current rung"` (no restated number) rather
-   than Block 1's explicit `"rung target 15"` style. The engine correctly handles both (see
-   deviation 1), but for `"current rung"` there's no numeric target to evaluate a hit against, so
-   LD-1 can't actually fire against most of the real programme content as currently authored —
-   only against Block 1's two ladder templates that restate a number. **Flag for Ryan:** either
-   the library needs a restated numeric target per ladder session going forward, or the Session
-   runner needs its own separate "did you hit today's rung target" input independent of
-   `repsDisplay`. Not fixed in P2 since it's a content/UX decision, not an engine bug — the LD-1
-   fixture tests prove the engine logic is correct given a numeric target.
+4. **CLOSED (P2.1) — rung-level targets, Library v1.0.1.** Originally: most Block 2+ home
+   session templates prescribe ladder exercises as `"current rung"` (no restated number), so
+   there was no numeric target to evaluate a hit against outside Block 1's two templates that
+   restate one. Resolved by extending `VariationLadder`'s `LadderRung` with exactly one of
+   `repTarget: number` or `timeTargetSec: number`, plus `perSide: boolean`, seeded from the
+   Library v1.0.1 rung target table (all 24 rungs, L1/L2/L3/L5 rep-based, L4 mixing timed
+   holds for rungs 1-3 with reps for rungs 4-5). `src/engine/progression.ts`'s
+   `resolveLadderTarget()` now reads the target from the *current* rung, with a template's own
+   explicit number (Block 1's "rung target 15" style) taking precedence where the library
+   restates one. `perSide` is display-only, matching how `ExercisePrescription.perSide` already
+   works elsewhere — it never splits a set into two logged entries. New fixtures cover a
+   time-target rung, a per-side rung, a target that decreases on rung advance (L4's rung 1→2),
+   and template-override precedence — 18/18 in `progression.test.ts`.
+
+   Fixing this exposed a real pre-existing bug: the replay loop skipped **all** Block 1
+   sessions, including home/ladder ones — a guard written for loaded-lift calibration (spec
+   §3.4 rule 4, which is scoped to gym lifts only) was incorrectly also blocking ladder
+   evaluation, which spec never exempts from Block 1. Fixed alongside the target-resolution
+   change (`recomputeProgressionStates`'s main loop now only skips Block 1 for the
+   `loadRegion` branch).
 5. **BT-4's pace-deficit formula is not literal spec text** (spec gives no formula, only the
    guardrail minimums and an example phrase). Documented and defended in the verifier section
    above rather than repeated here.
@@ -192,21 +202,71 @@ was reviewed by hand against the engine's expectations but not click-tested end-
    block-pointer/`cycleNumber` increment described in spec §3.2, not the baseline-replacement
    detail — spec explicitly defers that detail to P3 with year-1 data.
 
+## P2.1 — LD-1 content fix (Library v1.0.1)
+
+Closes deviation 4 above. Summary for the record:
+
+- **Schema:** `LadderRung` (`src/db/types.ts`) gained `perSide: boolean` (required) plus
+  exactly one of `repTarget`/`timeTargetSec` (enforced in `validateLibrary.ts` — a rung with
+  both or neither fails seed validation).
+- **Content:** all 24 rungs across L1-L5 seeded from the Library v1.0.1 rung target table you
+  provided. L4 (side plank) is the one ladder mixing target types: rungs 1-3 (Knees, Full 20s,
+  Full 40s) are `timeTargetSec`; rungs 4-5 (reach-through, leg lift) are `repTarget`.
+- **Engine:** LD-1 now resolves its target from the current rung by default, with a template's
+  own explicit number overriding where the library restates one (Block 1's two ladder
+  templates). Also fixed the Block-1-skips-everything bug described in deviation 4.
+- **Tests:** `progression.test.ts` LD-1 suite extended from 5 to 9 cases (18 tests total in the
+  file); `seed.test.ts` gained a dedicated integrity check that every real rung has exactly one
+  target type.
+- **Merge script hardening (`scripts/merge-video-links.mjs`):** seeding this data surfaced two
+  more pre-existing, unrelated bugs in the video-link merge script — both would have silently
+  corrupted `exercises.ts`/`ladders.ts` on any future re-run (e.g. when a broken video link
+  gets fixed), which is explicitly a supported, expected use of that script per its own header
+  comment. Both reproduced and were confirmed fixed by actually running the script twice in a
+  row and diffing the output byte-for-byte against itself (idempotent) and against `exercises.ts`
+  (zero diff):
+  1. Ladder rung-name extraction pulled *every* quoted string out of the rungs block
+     (`/"([^"]+)"/g` with no scoping), which happened to work only on a from-scratch first run
+     before any `videoUrl` string existed to be mistaken for a rung name. Fixed to extract each
+     rung object individually and pull `name`/`repTarget`/`timeTargetSec`/`perSide` from it by
+     field, so the new target fields also survive a re-run instead of being silently dropped.
+  2. Exercise extraction (`extractCalls`) mapped quoted call arguments to `id`/`name`/`pattern`/
+     `substitution` by **counting quoted strings**, using an argument-name list written for
+     `gymExercise`'s *original* 4-argument signature. P1.1 added `description`/`videoUrl` as two
+     new positional arguments before `substitution`, but this call site was never updated —
+     running the script actually corrupted `exercises.ts` in-session (substitution fields got
+     overwritten with description text) before this was caught and reverted via `git checkout`.
+     Fixed by splitting on true positional arguments (quote/paren-aware) rather than counting
+     quoted substrings, so a bare `null` videoUrl (which isn't a quoted string) no longer throws
+     the trailing optional argument's position off by one.
+  3. `exercisesOut` codegen hardcoded the entire `gymExercise`/`homeExercise` helper function
+     bodies as a template literal inside the script, which would have silently deleted P2's
+     `loadRegion`/`LOAD_REGION_BY_PATTERN` addition (added to those same functions) on the next
+     re-run — reproduced and reverted the same way. Fixed by preserving everything above the
+     generated arrays verbatim from the current file instead of re-typing it, so any future
+     hand-maintained addition to those helpers survives automatically.
+
+  None of this reached a commit — each corruption was caught by `git diff`/`git checkout`
+  before being staged. Recommend a `--check` (dry-run, diff-only, no write) mode for this
+  script in P3 given how easy it now is for future hand-maintained additions near
+  script-owned code to interact this way.
+
 ## Open items for P3
 
 - CSV export (§8.1) and the Progress Tracker workbook — not started, correctly stubbed/disabled
   in Settings.
 - Video URL editing (Exercise detail screen, spec §6 screen 6) — still doesn't exist; P1.1 also
   flagged this.
-- Deviation 4 above (ladder session templates needing a restated numeric target, or a separate
-  rung-target input) needs a decision before LD-1 is meaningfully exercisable against the real
-  programme.
 - On-device manual checklist (not self-certified, for Ryan):
   - [ ] Log a full Block 1 gym session to session 15 (or simulate via direct log entry) and
         confirm the Block 2 starting prescription matches the last Block 1 load logged.
-  - [ ] Confirm the ladder rung-advance offer appears after two consecutive hits on a Block 1
-        home template (H-01/H-02, which do have numeric targets) and that declining, then
+  - [ ] Confirm the ladder rung-advance offer appears after two consecutive hits on a Block 2+
+        home template (e.g. H-01 squat ladder, prescribed as "current rung" — now evaluable
+        against the rung's own repTarget per the Library v1.0.1 fix) and that declining, then
         confirming later, still advances correctly.
+  - [ ] Spot-check a couple of L4 (side plank) rungs on-device — rungs 1-3 are timed holds
+        (the Reps input doubles as "seconds held"), rungs 4-5 are counted reps; confirm the
+        UI distinction is clear enough in practice or flag if it needs its own label.
   - [ ] Round-trip a session package: log a session on the Pixel, export, import on the iPad,
         confirm it's idempotent on re-import.
   - [ ] Full-state export from iPad, import onto a freshly-seeded Pixel, confirm no

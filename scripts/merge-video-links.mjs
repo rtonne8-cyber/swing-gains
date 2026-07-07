@@ -79,8 +79,60 @@ function timestampToSeconds(ts) {
 // ---- extract current base metadata from src/data/exercises.ts (source of truth) ----
 const exercisesSrc = readFileSync(path.join(root, "src/data/exercises.ts"), "utf8");
 
+// Splits a call's argument text on top-level commas only (respecting quotes and nested
+// parens/brackets), so a comma inside a prose description ("...traps, feet...") or a paren
+// inside a name ("Back squat (barbell)") never gets mistaken for an argument boundary.
+function splitTopLevelArgs(argsText) {
+  const parts = [];
+  let cur = "";
+  let depth = 0;
+  let inQuotes = false;
+  for (let i = 0; i < argsText.length; i++) {
+    const c = argsText[i];
+    if (inQuotes) {
+      cur += c;
+      if (c === "\\") {
+        cur += argsText[++i] ?? "";
+        continue;
+      }
+      if (c === '"') inQuotes = false;
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+      cur += c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") depth++;
+    if (c === ")" || c === "]" || c === "}") depth--;
+    if (c === "," && depth === 0) {
+      parts.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += c;
+  }
+  if (cur.trim().length > 0 || parts.length > 0) parts.push(cur);
+  return parts.map((p) => p.trim());
+}
+
+// A quoted-string argument's content, or undefined for anything else (the bare `null`
+// keyword, an omitted trailing optional argument, or — for the false-positive match on each
+// helper's own `function gymExercise(...)` declaration — a raw `id: string` parameter).
+function unquotedStringArg(raw) {
+  if (raw.length >= 2 && raw[0] === '"' && raw[raw.length - 1] === '"') {
+    return raw.slice(1, -1).replace(/\\(.)/g, "$1");
+  }
+  return undefined;
+}
+
 // Scans for fnName(...) calls tracking quote state, so parentheses inside quoted string
 // arguments (e.g. "Back squat (barbell)") don't get mistaken for the call's closing paren.
+// argNames must list EVERY positional parameter in the real call signature, in order —
+// including ones this script doesn't care about the value of (e.g. description/videoUrl) —
+// because a trailing optional argument's identity depends on its true position, not on how
+// many quoted strings happen to precede it (videoUrl is sometimes a bare `null`, which isn't
+// a quoted string, and would otherwise throw every later positional argument off by one).
 function extractCalls(src, fnName, argNames) {
   const marker = `${fnName}(`;
   const results = [];
@@ -110,10 +162,11 @@ function extractCalls(src, fnName, argNames) {
       i++;
     }
     const argsText = src.slice(argsStart, i - 1);
-    const args = [...argsText.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+    const rawArgs = splitTopLevelArgs(argsText);
     const entry = {};
     argNames.forEach((name, idx) => {
-      if (args[idx] !== undefined) entry[name] = args[idx];
+      const value = unquotedStringArg(rawArgs[idx] ?? "");
+      if (value !== undefined) entry[name] = value;
     });
     results.push(entry);
     searchFrom = i;
@@ -123,10 +176,22 @@ function extractCalls(src, fnName, argNames) {
 
 // The regex scanner also matches each helper's own `function gymExercise(...)` signature
 // (no quoted args there, so it yields an entry with no id) — filter those out.
-const gymBase = extractCalls(exercisesSrc, "gymExercise", ["id", "name", "pattern", "substitution"]).filter(
-  (e) => e.id
-);
-const homeBase = extractCalls(exercisesSrc, "homeExercise", ["id", "name", "pattern", "ladderId"]).filter(
+const gymBase = extractCalls(exercisesSrc, "gymExercise", [
+  "id",
+  "name",
+  "pattern",
+  "description",
+  "videoUrl",
+  "substitution"
+]).filter((e) => e.id);
+const homeBase = extractCalls(exercisesSrc, "homeExercise", [
+  "id",
+  "name",
+  "pattern",
+  "description",
+  "videoUrl",
+  "ladderId"
+]).filter(
   (e) => e.id
 );
 
@@ -134,16 +199,38 @@ if (gymBase.length !== 24) fail(`expected 24 gym exercises extracted from exerci
 if (homeBase.length !== 25) fail(`expected 25 home exercises extracted from exercises.ts, got ${homeBase.length}`);
 
 // ---- extract current ladder base metadata from src/data/ladders.ts (source of truth) ----
+// Rung objects are extracted individually (not "every quoted string in the rungs block") so
+// this is safe to re-run once videoUrl strings are already present — an earlier version of
+// this scanner grabbed every quoted string indiscriminately, which happened to work only on
+// a from-scratch first run (before any videoUrl string existed to be mistaken for a name).
+// repTarget/timeTargetSec/perSide (P2.1, Library v1.0.1) are hand-maintained in ladders.ts,
+// not owned by this script, but must still be preserved across a re-run rather than dropped.
 const laddersSrc = readFileSync(path.join(root, "src/data/ladders.ts"), "utf8");
 const ladderBlockRe = /\{\s*id:\s*"([^"]+)",\s*pattern:\s*"([^"]+)",\s*rungs:\s*\[([\s\S]*?)\]\s*\}/g;
-const ladderBase = [...laddersSrc.matchAll(ladderBlockRe)].map((m) => ({
-  id: m[1],
-  pattern: m[2],
-  rungNames: [...m[3].matchAll(/"([^"]+)"/g)].map((r) => r[1])
-}));
+const ladderBase = [...laddersSrc.matchAll(ladderBlockRe)].map((m) => {
+  const rungBodies = [...m[3].matchAll(/\{([^{}]*)\}/g)].map((rm) => rm[1]);
+  const rungs = rungBodies.map((body) => {
+    const name = body.match(/name:\s*"([^"]+)"/)?.[1];
+    const repTarget = body.match(/repTarget:\s*(\d+)/)?.[1];
+    const timeTargetSec = body.match(/timeTargetSec:\s*(\d+)/)?.[1];
+    const perSide = body.match(/perSide:\s*(true|false)/)?.[1];
+    if (!name) fail(`ladders.ts: found a rung with no name in "${body}"`);
+    if (perSide === undefined) fail(`ladders.ts: rung "${name}" is missing perSide`);
+    if ((repTarget === undefined) === (timeTargetSec === undefined)) {
+      fail(`ladders.ts: rung "${name}" must have exactly one of repTarget/timeTargetSec`);
+    }
+    return {
+      name,
+      repTarget: repTarget !== undefined ? Number(repTarget) : undefined,
+      timeTargetSec: timeTargetSec !== undefined ? Number(timeTargetSec) : undefined,
+      perSide: perSide === "true"
+    };
+  });
+  return { id: m[1], pattern: m[2], rungs };
+});
 
 if (ladderBase.length !== 5) fail(`expected 5 ladders extracted from ladders.ts, got ${ladderBase.length}`);
-const totalRungs = ladderBase.reduce((sum, l) => sum + l.rungNames.length, 0);
+const totalRungs = ladderBase.reduce((sum, l) => sum + l.rungs.length, 0);
 if (totalRungs !== 24) fail(`expected 24 total rungs extracted from ladders.ts, got ${totalRungs}`);
 
 // ---- parse video-links.csv (exercise-level) ----
@@ -187,12 +274,12 @@ for (const row of ladderVideoCsv) {
 }
 
 for (const ladder of ladderBase) {
-  for (let i = 0; i < ladder.rungNames.length; i++) {
+  for (let i = 0; i < ladder.rungs.length; i++) {
     const key = `${ladder.id}#${i + 1}`;
-    if (!ladderRungMap.has(key)) fail(`docs/ladder-video-links.csv is missing ${key} (${ladder.rungNames[i]})`);
+    if (!ladderRungMap.has(key)) fail(`docs/ladder-video-links.csv is missing ${key} (${ladder.rungs[i].name})`);
   }
 }
-const expectedKeys = new Set(ladderBase.flatMap((l) => l.rungNames.map((_, i) => `${l.id}#${i + 1}`)));
+const expectedKeys = new Set(ladderBase.flatMap((l) => l.rungs.map((_, i) => `${l.id}#${i + 1}`)));
 const extraLadderKeys = [...ladderRungMap.keys()].filter((k) => !expectedKeys.has(k));
 if (extraLadderKeys.length > 0) fail(`docs/ladder-video-links.csv has unexpected rows: ${extraLadderKeys.join(", ")}`);
 
@@ -227,52 +314,21 @@ const homeLines = homeBase
   })
   .join("\n");
 
-const exercisesOut = `// Transcribed verbatim from docs/exercise-library-v1.0.md section 2 (Exercise Pool).
-// description and videoUrl merged from docs/video-links.csv (joined on exerciseId) via
-// scripts/merge-video-links.mjs — do not hand-edit the merged fields, re-run the script
-// instead. Ladder-anchor exercises (H-01, H-02, H-03, H-04, H-09) keep videoUrl null here;
-// their per-rung video detail lives on VariationLadder.rungs (see src/data/ladders.ts).
-import type { Exercise } from "../db/types";
-
-function gymExercise(
-  id: string,
-  name: string,
-  pattern: string,
-  description: string,
-  videoUrl: string | null,
-  substitution?: string
-): Exercise {
-  return {
-    id,
-    name,
-    pattern,
-    venue: "gym",
-    cues: substitution ? \`Busy-gym sub: \${substitution}\` : "",
-    description,
-    videoUrl,
-    substitution
-  };
+// Everything above the generated arrays (imports, the LOAD_REGION_BY_PATTERN table, the
+// gymExercise/homeExercise helper functions) is preserved VERBATIM from the current source
+// rather than re-typed as a template here. That prefix has grown hand-maintained additions
+// since this script was first written (e.g. P2's loadRegion computation) that this script
+// knows nothing about — an earlier version hardcoded the whole prefix and silently deleted
+// any such addition on every re-run. Only the mechanically-derived arrays below are
+// regenerated.
+const EXERCISES_ARRAYS_MARKER = "export const GYM_EXERCISES";
+const exercisesPrefixEnd = exercisesSrc.indexOf(EXERCISES_ARRAYS_MARKER);
+if (exercisesPrefixEnd === -1) {
+  fail(`src/data/exercises.ts: could not find "${EXERCISES_ARRAYS_MARKER}" to split the hand-maintained prefix from the generated arrays`);
 }
+const exercisesPrefix = exercisesSrc.slice(0, exercisesPrefixEnd).trimEnd();
 
-function homeExercise(
-  id: string,
-  name: string,
-  pattern: string,
-  description: string,
-  videoUrl: string | null,
-  ladderId?: string
-): Exercise {
-  return {
-    id,
-    name,
-    pattern,
-    venue: "home",
-    ladderId,
-    cues: "",
-    description,
-    videoUrl
-  };
-}
+const exercisesOut = `${exercisesPrefix}
 
 export const GYM_EXERCISES: Exercise[] = [
 ${gymLines}
@@ -290,19 +346,27 @@ writeFileSync(path.join(root, "src/data/exercises.ts"), exercisesOut);
 // ---- codegen: src/data/ladders.ts ----
 const laddersOut = `// Transcribed verbatim from docs/exercise-library-v1.0.md section 3 (Variation Ladders).
 // Per-rung videoUrl/timestampSec merged from docs/ladder-video-links.csv (joined on
-// ladder+rung) via scripts/merge-video-links.mjs — do not hand-edit the merged fields,
+// ladder+rung) via scripts/merge-video-links.mjs — do not hand-edit those two fields,
 // re-run the script instead. H-09 rung 1 (Low-amplitude hop-and-stick) intentionally has
 // no video (none adequate was found); videoUrl is null.
+//
+// repTarget/timeTargetSec/perSide (P2.1, Library v1.0.1 rung target table, LD-1 content
+// fix) ARE hand-maintained here — they're not part of the video merge. Every rung has
+// exactly one of repTarget/timeTargetSec (enforced in validateLibrary.ts); L4 (side plank)
+// is the one ladder that mixes both — rungs 1-3 are timed holds, rungs 4-5 are reps.
 import type { VariationLadder } from "../db/types";
 
 export const LADDERS: VariationLadder[] = [
 ${ladderBase
   .map((ladder) => {
-    const rungLines = ladder.rungNames
-      .map((name, i) => {
+    const rungLines = ladder.rungs
+      .map((rung, i) => {
         const v = ladderRungMap.get(`${ladder.id}#${i + 1}`);
-        const parts = [`name: ${esc(name)}`, `videoUrl: ${v.videoUrl ? esc(v.videoUrl) : "null"}`];
+        const parts = [`name: ${esc(rung.name)}`, `videoUrl: ${v.videoUrl ? esc(v.videoUrl) : "null"}`];
         if (v.timestampSec !== undefined) parts.push(`timestampSec: ${v.timestampSec}`);
+        if (rung.repTarget !== undefined) parts.push(`repTarget: ${rung.repTarget}`);
+        if (rung.timeTargetSec !== undefined) parts.push(`timeTargetSec: ${rung.timeTargetSec}`);
+        parts.push(`perSide: ${rung.perSide}`);
         return `      { ${parts.join(", ")} }`;
       })
       .join(",\n");

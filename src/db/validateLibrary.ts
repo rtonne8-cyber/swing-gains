@@ -56,6 +56,22 @@ export function validateLibrary(
       if (rung.timestampSec !== undefined && (!Number.isInteger(rung.timestampSec) || rung.timestampSec < 0)) {
         errors.push(`ladder ${ladder.id}: rung ${i + 1} timestampSec must be a positive integer`);
       }
+      const hasRepTarget = rung.repTarget !== undefined;
+      const hasTimeTarget = rung.timeTargetSec !== undefined;
+      if (hasRepTarget === hasTimeTarget) {
+        errors.push(
+          `ladder ${ladder.id}: rung ${i + 1} must have exactly one of repTarget/timeTargetSec (has ${hasRepTarget ? "both" : "neither"})`
+        );
+      }
+      if (hasRepTarget && (!Number.isInteger(rung.repTarget) || rung.repTarget! <= 0)) {
+        errors.push(`ladder ${ladder.id}: rung ${i + 1} repTarget must be a positive integer`);
+      }
+      if (hasTimeTarget && (!Number.isInteger(rung.timeTargetSec) || rung.timeTargetSec! <= 0)) {
+        errors.push(`ladder ${ladder.id}: rung ${i + 1} timeTargetSec must be a positive integer`);
+      }
+      if (typeof rung.perSide !== "boolean") {
+        errors.push(`ladder ${ladder.id}: rung ${i + 1} perSide must be a boolean`);
+      }
     });
   }
 

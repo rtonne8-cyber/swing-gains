@@ -234,9 +234,9 @@ describe("AT-P2 LD-1: ladder rung advancement", () => {
     id: "L1",
     pattern: "Squat",
     rungs: [
-      { name: "Rung 0", videoUrl: null },
-      { name: "Rung 1", videoUrl: null },
-      { name: "Rung 2", videoUrl: null }
+      { name: "Rung 0", videoUrl: null, repTarget: 10, perSide: false },
+      { name: "Rung 1", videoUrl: null, repTarget: 10, perSide: false },
+      { name: "Rung 2", videoUrl: null, repTarget: 10, perSide: false }
     ]
   };
 
@@ -308,5 +308,113 @@ describe("AT-P2 LD-1: ladder rung advancement", () => {
     ];
     const result = recompute({ exercises: [ladderExercise()], ladders: [lastRungLadder], sessionTemplates: [ladderTemplate()], sessionLogs: logs, setLogs });
     expect(result.find((p) => p.exerciseId === "EX-LADDER")?.currentLadderRung).toBe(0);
+  });
+
+  it("evaluates a time-target rung (Library v1.0.1: L4-style holds) against timeTargetSec", () => {
+    const timeLadder: VariationLadder = {
+      id: "L1", // must match ladderExercise()'s hardcoded ladderId
+      pattern: "Side plank",
+      rungs: [{ name: "Full, 20 s", videoUrl: null, timeTargetSec: 20, perSide: false }]
+    };
+    // Template says "current rung" — no explicit number, so the rung's own timeTargetSec
+    // must be what the engine evaluates against.
+    const template: SessionTemplate = {
+      id: "b2-h1",
+      blockId: "b2",
+      venue: "home",
+      type: "H1",
+      name: "Home",
+      exercisePrescriptions: [rx("EX-LADDER", "current rung")]
+    };
+    const hitLogs = [sessionLog("s1", "b2-h1", "2026-02-01")];
+    const hitSetLogs = [setLog("set1", "s1", "EX-LADDER", 1, 20, null, 7)]; // held 20s
+    const hitResult = recompute({ exercises: [ladderExercise()], ladders: [timeLadder], sessionTemplates: [template], sessionLogs: hitLogs, setLogs: hitSetLogs });
+    expect(hitResult.find((p) => p.exerciseId === "EX-LADDER")?.streakCount).toBe(1);
+
+    const missLogs = [sessionLog("s1", "b2-h1", "2026-02-01")];
+    const missSetLogs = [setLog("set1", "s1", "EX-LADDER", 1, 12, null, 7)]; // only held 12s
+    const missResult = recompute({ exercises: [ladderExercise()], ladders: [timeLadder], sessionTemplates: [template], sessionLogs: missLogs, setLogs: missSetLogs });
+    expect(missResult.find((p) => p.exerciseId === "EX-LADDER")?.streakCount).toBe(0);
+  });
+
+  it("evaluates a per-side rung the same way — perSide is display-only, not a doubled target", () => {
+    const perSideLadder: VariationLadder = {
+      id: "L1",
+      pattern: "Squat",
+      rungs: [{ name: "Split squat", videoUrl: null, repTarget: 12, perSide: true }]
+    };
+    const template: SessionTemplate = {
+      id: "b2-h1",
+      blockId: "b2",
+      venue: "home",
+      type: "H1",
+      name: "Home",
+      exercisePrescriptions: [rx("EX-LADDER", "current rung")]
+    };
+    const logs = [sessionLog("s1", "b2-h1", "2026-02-01")];
+    const setLogs = [setLog("set1", "s1", "EX-LADDER", 1, 12, null, 7)];
+    const result = recompute({ exercises: [ladderExercise()], ladders: [perSideLadder], sessionTemplates: [template], sessionLogs: logs, setLogs });
+    expect(result.find((p) => p.exerciseId === "EX-LADDER")?.streakCount).toBe(1);
+  });
+
+  it("uses the NEW rung's (lower) target after advancing, not the old rung's", () => {
+    // Mirrors L4: the target value can decrease from one rung to the next.
+    const decreasingLadder: VariationLadder = {
+      id: "L1", // must match ladderExercise()'s hardcoded ladderId
+      pattern: "Side plank",
+      rungs: [
+        { name: "Full, 40 s", videoUrl: null, timeTargetSec: 40, perSide: false },
+        { name: "Feet-stacked + reach-through", videoUrl: null, timeTargetSec: 20, perSide: false }
+      ]
+    };
+    const template: SessionTemplate = {
+      id: "b2-h1",
+      blockId: "b2",
+      venue: "home",
+      type: "H1",
+      name: "Home",
+      exercisePrescriptions: [rx("EX-LADDER", "current rung")]
+    };
+    const logs = [
+      sessionLog("s1", "b2-h1", "2026-02-01"),
+      sessionLog("s2", "b2-h1", "2026-02-08"),
+      sessionLog("s3", "b2-h1", "2026-02-15"), // confirm advance here
+      sessionLog("s4", "b2-h1", "2026-02-22")
+    ];
+    const setLogs = [
+      setLog("set1", "s1", "EX-LADDER", 1, 40, null, 7),
+      setLog("set2", "s2", "EX-LADDER", 1, 40, null, 7),
+      setLog("set3", "s3", "EX-LADDER", 1, 40, null, 7, { ladderAdvanceConfirmed: true }),
+      // 25s would have MISSED rung 0's 40s target, but rung 1's target is only 20s —
+      // proves the engine is reading the new (lower) rung's target, not the old one.
+      setLog("set4", "s4", "EX-LADDER", 1, 25, null, 7)
+    ];
+    const result = recompute({ exercises: [ladderExercise()], ladders: [decreasingLadder], sessionTemplates: [template], sessionLogs: logs, setLogs });
+    const state = result.find((p) => p.exerciseId === "EX-LADDER");
+    expect(state?.currentLadderRung).toBe(1);
+    expect(state?.streakCount).toBe(1); // session 4 was a hit against the new, lower target
+  });
+
+  it("template-level explicit target overrides the rung's own target (Block 1 precedence)", () => {
+    const overrideLadder: VariationLadder = {
+      id: "L1",
+      pattern: "Squat",
+      rungs: [{ name: "Bodyweight squat", videoUrl: null, repTarget: 10, perSide: false }]
+    };
+    // Block 1 restates an explicit numeric target ("rung target 15") that differs from the
+    // rung's own repTarget (10) — the template's explicit number must win.
+    const template: SessionTemplate = {
+      id: "b1-h1",
+      blockId: "b1",
+      venue: "home",
+      type: "H1",
+      name: "Home",
+      exercisePrescriptions: [rx("EX-LADDER", "rung target 15")]
+    };
+    const missLogs = [sessionLog("s1", "b1-h1", "2026-01-01")];
+    // 12 reps: below the template's 15 (a miss) but would have HIT the rung's own 10.
+    const missSetLogs = [setLog("set1", "s1", "EX-LADDER", 1, 12, null, 7)];
+    const result = recompute({ exercises: [ladderExercise()], ladders: [overrideLadder], sessionTemplates: [template], sessionLogs: missLogs, setLogs: missSetLogs, currentBlockId: "b1" });
+    expect(result.find((p) => p.exerciseId === "EX-LADDER")?.streakCount).toBe(0);
   });
 });

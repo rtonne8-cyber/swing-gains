@@ -124,10 +124,21 @@ export interface Exercise {
 // (ladder, rung). videoUrl is null where no adequate video was found (H-09 rung 1 is the
 // one intentional case in the source data); timestampSec is undefined when the source
 // video has no specific in-video timestamp for this rung.
+//
+// P2.1 addition (Library v1.0.1, LD-1 content fix): every rung carries exactly one of
+// repTarget or timeTargetSec — never both, never neither (enforced in validateLibrary.ts) —
+// plus perSide, which is display-only (mirrors ExercisePrescription.perSide elsewhere in
+// this codebase: it never splits a set into two logged entries, the logged rep/second count
+// already represents "per side"). This is what makes LD-1 evaluable against session
+// templates that just say "current rung" (spec §3.4) — previously there was no numeric
+// target to check a hit against unless the template itself restated one.
 export interface LadderRung {
   name: string;
   videoUrl: string | null;
   timestampSec?: number;
+  repTarget?: number;
+  timeTargetSec?: number;
+  perSide: boolean;
 }
 
 // Deviation (flagged): spec §7 models VariationLadder.exerciseIds as references to distinct
