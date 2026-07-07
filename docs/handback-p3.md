@@ -3,7 +3,7 @@
 **Phase:** P3 — reporting, polish, tracker (goal: the loop closes)
 **Repo:** https://github.com/rtonne8-cyber/swing-gains (public)
 **Deploy URL:** https://rtonne8-cyber.github.io/swing-gains/
-**Commit SHA:** not yet committed — build work only, awaiting your go-ahead to commit/push
+**Commit SHA:** `a189ce343502b0967866419ef71d000c0e19b40f`
 **Date:** 2026-07-07
 
 ## What's built
@@ -189,5 +189,4 @@ own conversion step, but it's no longer a blind eyeball check either.
 - P4+ (per spec §9, not gated): launch monitor file import, automated sync, adaptive
   programming concepts.
 
-I haven't committed or pushed any of this — let me know if you'd like me to, or if you want to
-review the diff/on-device behaviour first.
+Committed locally (`a189ce3`); not yet pushed — let me know if you'd like it pushed to `main`.
